@@ -3,10 +3,10 @@ import "./globals.css";
 import { ServiceWorker } from "@/components/service-worker";
 
 export const metadata: Metadata = {
-  title: "Order Book",
+  title: "Godown",
   description: "Orders, dispatches and pending balances for your business",
-  applicationName: "Order Book",
-  appleWebApp: { capable: true, title: "Order Book", statusBarStyle: "default" },
+  applicationName: "Godown",
+  appleWebApp: { capable: true, title: "Godown", statusBarStyle: "default" },
   icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
 };
 

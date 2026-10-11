@@ -14,6 +14,7 @@ import {
   updateParty,
 } from "@/masters/manage";
 import { fail, json, withUser } from "@/lib/api";
+import { afterStockChange } from "@/notify/hooks";
 
 /** Owner actions on clients and items (all checks happen in masters/manage.ts). */
 export async function POST(req: Request) {
@@ -52,6 +53,7 @@ export async function POST(req: Request) {
           lowStockLevel: typeof b.lowStockLevel === "string" && b.lowStockLevel ? b.lowStockLevel : undefined,
           active: typeof b.active === "boolean" ? b.active : undefined,
         });
+        afterStockChange(user);
         return json({ ok: true });
       case "item.alias.add":
         await addItemAlias(db, ctx, s("id"), s("alias"));

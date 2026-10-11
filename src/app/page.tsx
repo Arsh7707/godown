@@ -8,6 +8,7 @@ import { AppHeader } from "@/components/app-header";
 import { LogoutButton } from "@/components/logout-button";
 import { InstallPrompt } from "@/components/install-prompt";
 import { OutboxStatus } from "@/components/outbox-status";
+import { ReminderSettings } from "@/components/reminder-settings";
 
 export default async function Home() {
   const user = await requireUser();
@@ -58,6 +59,7 @@ export default async function Home() {
           )}
         </div>
         <InstallPrompt t={t} />
+        {user.role === "owner" && <ReminderSettings t={t} />}
         <div className="mt-auto">
           <LogoutButton label={t.logout} />
         </div>

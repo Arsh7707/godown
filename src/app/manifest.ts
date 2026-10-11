@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Order Book",
-    short_name: "Order Book",
+    name: "Godown",
+    short_name: "Godown",
     description: "Orders, dispatches and pending balances",
     start_url: "/",
     scope: "/",
@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f6f5f2",
     theme_color: "#1f4e79",
     lang: "hi",
-    // Android: shows Order Book in WhatsApp's Share menu for voice notes, photos and text.
+    // Android: shows Godown in WhatsApp's Share menu for voice notes, photos and text.
     share_target: {
       action: "/share",
       method: "POST",

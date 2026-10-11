@@ -482,3 +482,35 @@ export const stockMovements = pgTable(
     index("stock_movements_batch_idx").on(t.batchId),
   ],
 );
+
+/** A phone that agreed to get reminders (Web Push). One row per browser/install. */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: id(),
+    companyId: companyId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: createdAt(),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("push_subscriptions_endpoint_uq").on(t.endpoint), index("push_subscriptions_user_idx").on(t.userId)],
+);
+
+/** Last known low/OK state per item and unit, so a low-stock alert fires once when it crosses, not on every save. */
+export const stockAlertState = pgTable(
+  "stock_alert_state",
+  {
+    companyId: companyId(),
+    /** unitKey(itemId, unit) */
+    key: text("key").notNull(),
+    low: boolean("low").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("stock_alert_state_company_key_uq").on(t.companyId, t.key)],
+);

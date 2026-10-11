@@ -7,6 +7,7 @@ import { stockShareText, whatsappUrl } from "@/entries/share";
 import type { InputMethod } from "@/ledger/service";
 import { fail, json, withUser } from "@/lib/api";
 import { unitLabel } from "@/lib/units";
+import { afterStockChange } from "@/notify/hooks";
 
 interface Body {
   entryCaptureId?: string;
@@ -42,6 +43,7 @@ export async function POST(req: Request) {
         .set({ status: "confirmed", updatedAt: new Date() })
         .where(and(eq(captures.companyId, user.companyId), eq(captures.captureId, b.captureId)));
     }
+    if (!r.duplicate) afterStockChange(user);
     if (r.duplicate) return json({ ok: true, duplicate: true, share: null });
     const its = await db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(inArray(items.id, r.lines.map((l) => l.itemId)));
     const item = new Map(its.map((i) => [i.id, i]));
