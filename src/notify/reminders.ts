@@ -18,7 +18,7 @@ import { stockLevels, stockOverview, type StockRow } from "@/stock/service";
 import { todayIST } from "@/lib/dates";
 import { formatQty } from "@/lib/qty";
 import { unitKey, unitLabel } from "@/lib/units";
-import { messages } from "@/i18n/messages";
+import { pushText } from "./text";
 import { notifyUsers, ownerIds, type PushSender } from "./push";
 
 const LIST = 3;
@@ -59,7 +59,7 @@ export async function buildDigest(db: Db, companyId: string, today: string): Pro
 }
 
 export function digestMessage(d: Digest, lang: "hi" | "en") {
-  const t = messages(lang).n;
+  const t = pushText(lang);
   const parts: string[] = [];
   if (d.overdueOrders) {
     parts.push(`${t.overdueTitle(d.overdueOrders)}: ${listWithMore(d.overdue.map((p) => `${p.partyName} (${t.days(p.oldestDays)})`), t.more)}`);
@@ -112,7 +112,7 @@ export async function checkLowStock(db: Db, send: PushSender | null, companyId: 
   if (!newlyLow.length || !send) return newlyLow;
   const owners = await ownerIds(db, companyId, actorId);
   await notifyUsers(db, send, companyId, owners, (u) => {
-    const t = messages(u.language).n;
+    const t = pushText(u.language);
     return {
       title: t.lowTitle,
       body: listWithMore(newlyLow.map((r) => `${r.name}: ${formatQty(r.free)} ${r.unit} ${t.freeLeft}`), t.more),
@@ -148,7 +148,7 @@ export async function checkOverStock(
   const item = new Map(its.map((i) => [i.id, i]));
   const owners = await ownerIds(db, ctx.companyId, ctx.actorId);
   await notifyUsers(db, send, ctx.companyId, owners, (u) => {
-    const t = messages(u.language).n;
+    const t = pushText(u.language);
     const what = short.map((s) => `${item.get(s.itemId)?.name}: ${formatQty(-s.inStock)} ${unitLabel(s.unit ?? null, item.get(s.itemId)?.unit ?? "")} ${t.short}`);
     return {
       title: t.overTitle,

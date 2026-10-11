@@ -85,3 +85,13 @@ describe("stock share line", async () => {
     expect(stockShareText("hi", "receipt", [{ itemName: "Crown", unit: "pcs", change: 100, after: 100 }])).toBe("माल आया: Crown +1 pcs (अब 1)");
   });
 });
+
+describe("UI messages", () => {
+  it("are plain strings (they are passed to client components)", async () => {
+    const { messages } = await import("@/i18n/messages");
+    const walk = (o: unknown, path: string): string[] =>
+      typeof o === "function" ? [path] : o && typeof o === "object" ? Object.entries(o).flatMap(([k, v]) => walk(v, `${path}.${k}`)) : [];
+    expect(walk(messages("en"), "en")).toEqual([]);
+    expect(walk(messages("hi"), "hi")).toEqual([]);
+  });
+});
