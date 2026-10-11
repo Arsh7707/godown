@@ -66,7 +66,7 @@ export function UpdateScreen(props: {
     },
     [interpret, t],
   );
-  const { state, elapsed, start, stop } = useRecorder(onVoice);
+  const { state, elapsed, toggle } = useRecorder(onVoice);
 
   if (step.s === "proposal") {
     const p = step.p;
@@ -151,16 +151,9 @@ export function UpdateScreen(props: {
         <div className="space-y-4">
           <p className="text-stone-600">{t.o.updateHint}</p>
           <button
-            className={`flex w-full touch-none select-none items-center justify-center gap-3 rounded-2xl py-8 text-2xl font-bold text-white shadow-sm ${recording ? "bg-red-600" : "bg-[#2e7d4f]"}`}
-            onPointerDown={(e) => {
-              try {
-                e.currentTarget.setPointerCapture(e.pointerId);
-              } catch {}
-              start();
-            }}
-            onPointerUp={stop}
-            onPointerCancel={stop}
-            onContextMenu={(e) => e.preventDefault()}
+            className={`flex w-full select-none items-center justify-center gap-3 rounded-2xl py-8 text-2xl font-bold text-white shadow-sm ${recording ? "bg-red-600" : "bg-[#2e7d4f]"}`}
+            onClick={toggle}
+          aria-pressed={recording}
           >
             🎤 {recording ? `${Math.floor(elapsed)}s · ${t.e.releaseToSend}` : t.e.holdToRecord}
           </button>

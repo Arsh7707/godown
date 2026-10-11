@@ -462,7 +462,7 @@ function CapturePanel({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
-  const { state, elapsed, start, stop } = useRecorder(onVoice);
+  const { state, elapsed, toggle } = useRecorder(onVoice);
   const tile = "flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl text-lg font-semibold shadow-sm select-none active:scale-[.98]";
   const recording = state === "recording";
 
@@ -474,17 +474,9 @@ function CapturePanel({
           {t.e.photo}
         </button>
         <button
-          className={`${tile} touch-none ${recording ? "scale-105 bg-red-600 text-white" : "bg-[#2e7d4f] text-white"}`}
-          onPointerDown={(e) => {
-            try {
-              // Keep receiving the release even if the finger slides off the button.
-              e.currentTarget.setPointerCapture(e.pointerId);
-            } catch {}
-            start();
-          }}
-          onPointerUp={stop}
-          onPointerCancel={stop}
-          onContextMenu={(e) => e.preventDefault()}
+          className={`${tile} ${recording ? "scale-105 bg-red-600 text-white" : "bg-[#2e7d4f] text-white"}`}
+          onClick={toggle}
+          aria-pressed={recording}
         >
           <span className="text-4xl" aria-hidden>🎤</span>
           {recording ? `${Math.floor(elapsed)}s` : t.e.voice}

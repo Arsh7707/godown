@@ -46,35 +46,42 @@ export function audioSeconds(blob: Blob): Promise<number> {
 const MAX_SECONDS = 120;
 const MIN_MS = 700;
 
-/** Hold-to-record. start() on press, stop() on release; onDone gets the audio unless it was too short. */
+/** Tap to start, tap again to stop; onDone gets the audio unless it was too short. */
 export function useRecorder(onDone: (blob: Blob, seconds: number) => void) {
-  const [state, setState] = useState<"idle" | "recording" | "blocked" | "tooShort">("idle");
+  const [state, setState] = useState<"idle" | "starting" | "recording" | "blocked" | "tooShort">("idle");
   const [elapsed, setElapsed] = useState(0);
   const rec = useRef<MediaRecorder | null>(null);
+  const starting = useRef(false);
   const startedAt = useRef(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pendingStop = useRef(false);
 
   const cleanup = () => {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
   };
-  useEffect(() => cleanup, []);
-
-  const stop = useCallback(() => {
-    if (!rec.current) {
-      pendingStop.current = true; // released before the mic was ready
-      return;
-    }
-    if (rec.current.state === "recording") rec.current.stop();
-  }, []);
+  useEffect(
+    () => () => {
+      cleanup();
+      // Leaving the screen mid-recording: release the mic without sending.
+      const r = rec.current;
+      if (r) {
+        r.onstop = null;
+        if (r.state === "recording") r.stop();
+        r.stream.getTracks().forEach((t) => t.stop());
+      }
+    },
+    [],
+  );
 
   const start = useCallback(async () => {
-    pendingStop.current = false;
+    if (starting.current || rec.current) return;
+    starting.current = true;
+    setState("starting");
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     } catch {
+      starting.current = false;
       setState("blocked");
       return;
     }
@@ -95,6 +102,7 @@ export function useRecorder(onDone: (blob: Blob, seconds: number) => void) {
       onDone(new Blob(chunks, { type: (r.mimeType || "audio/webm").split(";")[0] }), ms / 1000);
     };
     rec.current = r;
+    starting.current = false;
     startedAt.current = Date.now();
     r.start(250);
     setElapsed(0);
@@ -104,8 +112,17 @@ export function useRecorder(onDone: (blob: Blob, seconds: number) => void) {
       setElapsed(s);
       if (s >= MAX_SECONDS) r.stop();
     }, 200);
-    if (pendingStop.current) r.stop();
   }, [onDone]);
 
-  return { state, elapsed, start, stop };
+  const stop = useCallback(() => {
+    if (rec.current?.state === "recording") rec.current.stop();
+  }, []);
+
+  /** One button: first tap starts, next tap stops and sends. */
+  const toggle = useCallback(() => {
+    if (rec.current) stop();
+    else start();
+  }, [start, stop]);
+
+  return { state, elapsed, toggle };
 }
