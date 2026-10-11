@@ -1,0 +1,7 @@
+{
+  "kind": "order",
+  "today": "2026-10-08",
+  "party": "Gupta Traders",
+  "lines": [{ "item": "Cotton Poplin", "quantity": "50" }],
+  "promisedDate": "2026-10-15"
+}

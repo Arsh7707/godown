@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+
+# Extraction fixtures: real customer data stays local unless deliberately added
+/fixtures/*
+!/fixtures/README.md
+!/fixtures/catalog.example.json
+!/fixtures/example-*
+/fixtures/results/
+
+# Real company seed data (names, phone numbers)
+/seed/*.local.json
+
+# Local file storage in development
+/.storage/
+
+# Local throwaway browser-test scripts
+/scripts/zz-*

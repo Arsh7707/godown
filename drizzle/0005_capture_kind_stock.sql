@@ -1,0 +1,1 @@
+ALTER TYPE "public"."capture_kind" ADD VALUE 'stock';

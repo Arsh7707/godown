@@ -1,0 +1,7 @@
+{
+  "kind": "dispatch",
+  "party": "Sharma Textiles",
+  "lines": [{ "item": "D-4012", "quantity": "5" }],
+  "takenBy": "Ramesh",
+  "transport": "VRL"
+}

@@ -1,0 +1,8 @@
+# Never upload secrets, local data or customer samples
+.env*
+!.env.example
+seed/*.local.json
+fixtures/
+.storage/
+node_modules/
+.next/

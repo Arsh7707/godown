@@ -1,0 +1,7 @@
+{
+  "company": "Your Company Pvt Ltd",
+  "users": [
+    { "name": "Owner Name", "phone": "+919800000001", "role": "owner", "language": "hi" },
+    { "name": "Staff Name", "phone": "+919800000002", "role": "staff", "language": "hi" }
+  ]
+}

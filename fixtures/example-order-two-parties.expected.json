@@ -1,0 +1,4 @@
+{ "kind": "order", "entries": [
+  { "party": "Sharma Textiles", "lines": [{ "item": "D-4012", "quantity": "20" }, { "item": "Cotton Poplin", "quantity": "10" }, { "item": "D-4013", "quantity": "5" }] },
+  { "party": "Gupta Traders", "lines": [{ "item": "Cotton Poplin", "quantity": "50" }] }
+] }

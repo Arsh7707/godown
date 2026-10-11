@@ -1,0 +1,13 @@
+{
+  "parties": [
+    { "name": "Sharma Textiles", "aliases": ["Sharma", "शर्मा"] },
+    { "name": "Gupta Traders", "aliases": ["Gupta"] },
+    { "name": "Mehta Fabrics", "aliases": [] },
+    { "name": "Singh Cloth House", "aliases": ["Singh", "सिंह", "ਸਿੰਘ"] }
+  ],
+  "items": [
+    { "name": "D-4012", "unit": "pcs", "aliases": ["4012"] },
+    { "name": "D-4013", "unit": "pcs", "aliases": ["4013"] },
+    { "name": "Cotton Poplin", "unit": "meter", "aliases": ["poplin"] }
+  ]
+}
