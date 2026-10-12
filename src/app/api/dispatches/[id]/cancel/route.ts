@@ -2,7 +2,7 @@ import { db } from "@/db/client";
 import { ctxFor } from "@/auth/session";
 import { cancelDispatch } from "@/ledger/service";
 import { fail, json, withUser } from "@/lib/api";
-import { afterStockChange } from "@/notify/hooks";
+import { afterStaffAction, afterStockChange } from "@/notify/hooks";
 
 /** Cancel a dispatch: its goods stop counting and the orders' balances reopen. */
 export async function POST(req: Request, { params }: RouteContext<"/api/dispatches/[id]/cancel">) {
@@ -12,6 +12,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/dispatch
     if (typeof b.baseRev !== "number") return fail("INCOMPLETE");
     const r = await cancelDispatch(db, ctxFor(user), id, { baseRev: b.baseRev, reason: b.reason ?? null });
     afterStockChange(user);
+    afterStaffAction(user, { action: "dispatch.cancel", partyId: r.partyId, url: `/dispatches/${id}` });
     return json({ ok: true, rev: r.rev });
   });
 }

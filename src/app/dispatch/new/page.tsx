@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { ctxFor, requireUser } from "@/auth/session";
 import { orderDetail, partyOrders } from "@/ledger/queries";
-import { todayIST } from "@/lib/dates";
+import { pastDay, todayIST } from "@/lib/dates";
 import { formatQty } from "@/lib/qty";
 import { EntryScreen } from "@/components/entry/entry-screen";
 import type { FormState } from "@/components/entry/form-state";
@@ -13,6 +13,7 @@ export default async function NewDispatchPage({ searchParams }: PageProps<"/disp
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
   const today = todayIST();
+  const day = pastDay(one(sp.date));
 
   // Dispatch against a pending order: start with its remaining items filled in.
   let prefill: FormState | undefined;
@@ -25,7 +26,7 @@ export default async function NewDispatchPage({ searchParams }: PageProps<"/disp
         partyId: o.party.id,
         partyMention: null,
         partyCandidates: [],
-        date: today,
+        date: day ?? today,
         promisedDate: "",
         takenBy: "",
         transport: "",
@@ -53,7 +54,7 @@ export default async function NewDispatchPage({ searchParams }: PageProps<"/disp
         partyId,
         partyMention: null,
         partyCandidates: [],
-        date: today,
+        date: day ?? today,
         promisedDate: "",
         takenBy: "",
         transport: "",
@@ -63,5 +64,5 @@ export default async function NewDispatchPage({ searchParams }: PageProps<"/disp
       };
     }
   }
-  return <EntryScreen kind="dispatch" lang={user.language} today={today} resume={one(sp.resume)} fix={one(sp.fix)} shared={one(sp.shared)} prefill={prefill} />;
+  return <EntryScreen kind="dispatch" lang={user.language} today={today} day={day} resume={one(sp.resume)} fix={one(sp.fix)} shared={one(sp.shared)} prefill={prefill} />;
 }

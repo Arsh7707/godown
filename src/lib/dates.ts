@@ -41,3 +41,8 @@ export function addDays(s: string, n: number): string {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+
+/** A day picked from History: a real date before today, else undefined (= today). */
+export function pastDay(s: string | undefined, now: Date = new Date()): string | undefined {
+  return s && isValidDate(s) && s < todayIST(now) ? s : undefined;
+}

@@ -472,7 +472,7 @@ export async function cancelOrder(db: Db, ctx: Ctx, orderId: string, input: { ba
         cancelled: centiToDecimal(balance(l)),
       })),
     });
-    return { orderId, rev: rev.rev };
+    return { orderId, rev: rev.rev, partyId: cur.partyId };
   });
 }
 
@@ -703,7 +703,7 @@ export async function cancelDispatch(db: Db, ctx: Ctx, dispatchId: string, input
       false,
     );
     await audit(tx, ctx, "dispatch.cancel", "dispatch", dispatchId, { fromRev: cur.rev, toRev: rev.rev, reason: input.reason ?? null });
-    return { dispatchId, rev: rev.rev };
+    return { dispatchId, rev: rev.rev, partyId: cur.partyId };
   });
 }
 

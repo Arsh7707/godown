@@ -13,6 +13,7 @@ import {
   updateItem,
   updateParty,
 } from "@/masters/manage";
+import { addUser, revealTaxId, updateCompany, updateUser, type Role } from "@/masters/profiles";
 import { fail, json, withUser } from "@/lib/api";
 import { afterStockChange } from "@/notify/hooks";
 
@@ -20,8 +21,11 @@ import { afterStockChange } from "@/notify/hooks";
 export async function POST(req: Request) {
   return withUser(async (user) => {
     const ctx = ctxFor(user);
-    const b = (await req.json().catch(() => ({}))) as Record<string, string | boolean | undefined>;
+    const b = (await req.json().catch(() => ({}))) as Record<string, string | boolean | null | undefined>;
     const s = (k: string) => (typeof b[k] === "string" ? (b[k] as string) : "");
+    /** A text field that was sent (string, or null to clear); undefined when absent. */
+    const opt = (k: string) => (typeof b[k] === "string" ? (b[k] as string) : b[k] === null ? null : undefined);
+    const flag = (k: string) => (typeof b[k] === "boolean" ? (b[k] as boolean) : undefined);
     if (user.role !== "owner") return fail("FORBIDDEN", 403);
     switch (b.action) {
       case "party.create": {
@@ -34,6 +38,30 @@ export async function POST(req: Request) {
           name: typeof b.name === "string" ? b.name : undefined,
           phone: typeof b.phone === "string" ? b.phone : undefined,
           active: typeof b.active === "boolean" ? b.active : undefined,
+          city: opt("city"),
+          state: opt("state"),
+          taxIdType: b.taxIdType === "gstin" || b.taxIdType === "aadhaar" || b.taxIdType === null ? b.taxIdType : undefined,
+          taxId: opt("taxId"),
+        });
+        return json({ ok: true });
+      case "party.taxid.reveal":
+        return json({ ok: true, taxId: await revealTaxId(db, ctx, s("id")) });
+      case "company.update":
+        await updateCompany(db, ctx, { name: opt("name") ?? undefined, city: opt("city"), state: opt("state") });
+        return json({ ok: true });
+      case "user.add": {
+        const u = await addUser(db, ctx, { name: s("name"), phone: s("phone"), role: s("role") as Role, city: opt("city"), state: opt("state"), stockKeeper: flag("stockKeeper") });
+        return json({ ok: true, id: u.id });
+      }
+      case "user.update":
+        await updateUser(db, ctx, s("id"), {
+          name: opt("name") ?? undefined,
+          phone: opt("phone") ?? undefined,
+          role: (opt("role") ?? undefined) as Role | undefined,
+          city: opt("city"),
+          state: opt("state"),
+          stockKeeper: flag("stockKeeper"),
+          active: flag("active"),
         });
         return json({ ok: true });
       case "party.alias.add":

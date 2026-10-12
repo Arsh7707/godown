@@ -28,6 +28,8 @@ export interface SaveBody {
   sourceText?: string | null;
   applyUnmatched?: boolean;
   lines: { itemId: string; quantity: string; unit?: string | null }[];
+  /** Picked suggestions with what was written/said, to learn as extra names. */
+  learn?: unknown;
 }
 
 export async function saveEntry(user: SessionUser, kind: "order" | "dispatch", b: SaveBody) {

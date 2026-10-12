@@ -21,7 +21,15 @@ export type LedgerErrorCode =
   | "IN_USE"
   | "UNIT_LOCKED"
   | "INVALID_UNIT"
-  | "EDIT_WINDOW_CLOSED";
+  | "EDIT_WINDOW_CLOSED"
+  | "INVALID_STATE"
+  | "INVALID_PHONE"
+  | "DUPLICATE_PHONE"
+  | "LAST_OWNER"
+  | "SELF_CHANGE"
+  | "INVALID_GSTIN"
+  | "INVALID_AADHAAR"
+  | "TAX_ID_TAKEN";
 
 /** Expected, user-facing rule violations. `details` carries numbers for the UI to localise. */
 export class LedgerError extends Error {

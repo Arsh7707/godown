@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { jaroWinkler, matchMention } from "@/extraction/matcher";
-import { buildEntries, emptyDraft } from "@/extraction/draft";
+import { buildEntries, emptyDraft, type EntryContext } from "@/extraction/draft";
 import { runExtraction } from "@/extraction/pipeline";
 import type { Entry, EntryKind, ModelOutput } from "@/extraction/schema";
 import { ExtractionError, type Catalog, type Extractor, type Transcriber } from "@/extraction/types";
@@ -61,7 +61,7 @@ function out(p: Partial<ModelOutput> & Partial<Entry> = {}): ModelOutput {
 }
 
 /** First entry's draft, with input-level and entry issues together (single-party cases). */
-function buildDraft(kind: EntryKind, o: ModelOutput, cat: Catalog, ctx: { today: string; now: Date; sourceText: string | null }) {
+function buildDraft(kind: EntryKind, o: ModelOutput, cat: Catalog, ctx: EntryContext) {
   const r = buildEntries(kind, o, cat, ctx);
   return { draft: r.entries[0]?.draft ?? emptyDraft(kind, ctx.today, ctx.sourceText), issues: [...r.issues, ...(r.entries[0]?.issues ?? [])] };
 }
@@ -163,12 +163,27 @@ describe("draft building", () => {
     expect(issues).toEqual([]);
   });
 
-  it("flags future entry dates but keeps past ones", () => {
-    const future = buildDraft("order", out({ entry_date: { iso: "2026-10-09", as_written: "kal" } }), catalog, ctx);
-    expect(future.issues).toContainEqual(expect.objectContaining({ code: "ENTRY_DATE_FUTURE", blocking: true }));
+  it("uses the slip's date unless it's in the future; then today, with a note", () => {
+    const future = buildDraft("order", out({ entry_date: { iso: "2026-10-09", as_written: "9/10" } }), catalog, ctx);
+    expect(future.issues).toContainEqual(expect.objectContaining({ code: "ENTRY_DATE_FUTURE", blocking: false }));
+    expect(future.draft).toMatchObject({ entryDate: ctx.today, entryDateStated: false });
+    expect(future.issues.some((i) => i.blocking)).toBe(false);
     const past = buildDraft("order", out({ entry_date: { iso: "2026-10-07", as_written: "kal" } }), catalog, ctx);
     expect(past.issues).toEqual([]);
     expect(past.draft).toMatchObject({ entryDate: "2026-10-07", entryDateStated: true });
+  });
+
+  it("no date on the slip: today, or the day picked in History", () => {
+    const none = buildDraft("order", out({ entry_date: { iso: null, as_written: null } }), catalog, ctx);
+    expect(none.draft).toMatchObject({ entryDate: ctx.today, entryDateStated: false });
+    const picked = buildDraft("order", out({ entry_date: { iso: null, as_written: null } }), catalog, { ...ctx, defaultDate: "2026-10-01" });
+    expect(picked.draft.entryDate).toBe("2026-10-01");
+    // A date written on the slip still wins over the picked day.
+    const written = buildDraft("order", out({ entry_date: { iso: "2026-10-03", as_written: "3/10" } }), catalog, { ...ctx, defaultDate: "2026-10-01" });
+    expect(written.draft.entryDate).toBe("2026-10-03");
+    // A future date on the slip falls back to the picked day.
+    const future = buildDraft("order", out({ entry_date: { iso: "2026-10-20", as_written: "20/10" } }), catalog, { ...ctx, defaultDate: "2026-10-01" });
+    expect(future.draft.entryDate).toBe("2026-10-01");
   });
 
   it("keeps a future promised date on orders, ignores it on dispatches", () => {

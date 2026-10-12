@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Candidate } from "@/extraction/matcher";
+import { similarity, type Candidate } from "@/extraction/matcher";
 import type { Messages } from "@/i18n/messages";
 
 interface Option {
@@ -41,7 +41,18 @@ export function Picker({
   const list = useMemo(() => {
     const n = norm(q);
     if (!n) return options;
-    return options.filter((o) => [o.name, ...o.aliases].some((s) => norm(s).includes(n)));
+    const direct = options.filter((o) => [o.name, ...o.aliases].some((s) => norm(s).includes(n)));
+    if (n.length < 3) return direct;
+    // Then names that are close in spelling or sound (typos, Hinglish, Hindi vs English letters).
+    const have = new Set(direct.map((o) => o.id));
+    const close = options
+      .filter((o) => !have.has(o.id))
+      .map((o) => ({ o, score: Math.max(...[o.name, ...o.aliases].map((s) => similarity(q, s))) }))
+      .filter((x) => x.score >= 0.75)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((x) => x.o);
+    return [...direct, ...close];
   }, [q, options]);
   const exact = options.some((o) => norm(o.name) === norm(q));
   const row = "flex w-full items-center justify-between gap-3 border-b border-stone-100 px-4 py-4 text-left text-lg active:bg-stone-100";

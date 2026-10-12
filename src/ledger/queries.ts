@@ -1,6 +1,7 @@
 /**
  * Read models for the Pending and Order screens.
  */
+import { displayTaxId } from "@/lib/india";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db/types";
 import { allocations, dispatchLines, dispatchRevisions, dispatches, items, orderLines, orderRevisions, orders, parties, users } from "@/db/schema";
@@ -106,7 +107,7 @@ export async function partyOrders(db: Db, ctx: Ctx, partyId: string) {
   }
   const all = [...ordersById.values()].sort((a, b) => a.orderDate.localeCompare(b.orderDate));
   return {
-    party: { id: party.id, name: party.name },
+    party: { id: party.id, name: party.name, city: party.city, state: party.state, taxIdType: party.taxIdType, taxId: displayTaxId(party.taxIdType, party.taxId) },
     open: all.filter((o) => o.lines.some((l) => l.balance > 0)).reverse(),
     closed: all.filter((o) => !o.lines.some((l) => l.balance > 0)).reverse(),
   };

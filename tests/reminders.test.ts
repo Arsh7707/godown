@@ -4,7 +4,7 @@ import type { Db } from "@/db/types";
 import { createDispatch, createOrder } from "@/ledger/service";
 import { recordStock } from "@/stock/service";
 import { saveSubscription, type PushMessage, type PushSender } from "@/notify/push";
-import { buildDigest, checkLowStock, checkOverStock, digestMessage, sendMorningDigests } from "@/notify/reminders";
+import { buildDigest, checkLowStock, checkOverStock, digestMessage, notifyStaffActivity, sendMorningDigests, sendStockKeeperReminders } from "@/notify/reminders";
 import { unitKey } from "@/lib/units";
 import { eq } from "drizzle-orm";
 import { cid, freshDb, makeCompany, NOW, TODAY } from "./helpers";
@@ -104,5 +104,63 @@ describe("instant stock alerts", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].msg.title).toBe("Sent more than stock");
     expect(sent[0].msg.body).toBe("D-4012: 3 pcs short\nto Sharma Textiles · by Ramesh");
+  });
+});
+
+describe("staff activity alerts", () => {
+  beforeEach(async () => {
+    await db.update(s.users).set({ language: "en" }).where(eq(s.users.id, co.owner.userId));
+    await subscribe(co.owner, "https://push/owner");
+    await subscribe(co.staff, "https://push/staff");
+  });
+  const staff = () => ({ companyId: co.company.id, userId: co.staff.userId, name: "Ramesh", role: "staff" });
+
+  it("tells owners what a staff member entered, with client and items", async () => {
+    await notifyStaffActivity(db, sender, staff(), { action: "order.create", partyId: co.sharma.id, lines: [{ itemId: co.d4012.id, quantity: "10" }, { itemId: co.cotton.id, quantity: "2.5", unit: null }], url: "/orders/x" });
+    expect(sent).toEqual([{ endpoint: "https://push/owner", msg: expect.objectContaining({ title: "Ramesh · New order", body: "Sharma Textiles: D-4012 10 pcs, Cotton Poplin 2.5 meter", url: "/orders/x" }) }]);
+  });
+
+  it("covers edits, cancels, stock and new names", async () => {
+    await notifyStaffActivity(db, sender, staff(), { action: "dispatch.cancel", partyId: co.gupta.id, url: "/dispatches/x" });
+    await notifyStaffActivity(db, sender, staff(), { action: "stock.adjustment", lines: [{ itemId: co.d4012.id, quantity: "-2" }], url: "/stock" });
+    await notifyStaffActivity(db, sender, staff(), { action: "party.create", name: "New Shop", url: "/pending" });
+    expect(sent.map((x) => [x.msg.title, x.msg.body])).toEqual([
+      ["Ramesh · Dispatch cancelled", "Gupta Traders"],
+      ["Ramesh · Stock adjusted", "D-4012 -2 pcs"],
+      ["Ramesh · New client", "New Shop"],
+    ]);
+  });
+
+  it("owners' own actions and viewers don't alert anyone", async () => {
+    await notifyStaffActivity(db, sender, { ...staff(), userId: co.owner.userId, role: "owner" }, { action: "order.create", partyId: co.sharma.id, url: "/" });
+    await notifyStaffActivity(db, sender, { ...staff(), role: "viewer" }, { action: "order.create", url: "/" });
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("stock keeper reminder (11 AM)", () => {
+  beforeEach(async () => {
+    await db.update(s.users).set({ stockKeeper: true, language: "en" }).where(eq(s.users.id, co.staff2.userId));
+    await subscribe(co.staff2, "https://push/keeper");
+    await subscribe(co.owner, "https://push/owner");
+  });
+
+  it("asks the stock keeper only, when no goods in was entered today", async () => {
+    expect(await sendStockKeeperReminders(db, sender, NOW)).toBe(1);
+    expect(sent).toEqual([{ endpoint: "https://push/keeper", msg: expect.objectContaining({ title: "Maal add kiya?", url: "/stock/in" }) }]);
+  });
+
+  it("skips the day once goods in was entered (even if dated another day); a count doesn't count", async () => {
+    await recordStock(db, co.staff, { ...app, captureId: cid(), kind: "count", date: TODAY, lines: [{ itemId: co.d4012.id, quantity: 5 }] });
+    expect(await sendStockKeeperReminders(db, sender, NOW)).toBe(1);
+    sent = [];
+    await recordStock(db, co.staff, { ...app, captureId: cid(), kind: "receipt", date: "2026-10-01", lines: [{ itemId: co.d4012.id, quantity: 5 }] });
+    expect(await sendStockKeeperReminders(db, sender, NOW)).toBe(0);
+    expect(sent).toEqual([]);
+  });
+
+  it("no stock keeper set: nothing sent; removed people aren't reminded", async () => {
+    await db.update(s.users).set({ active: false }).where(eq(s.users.id, co.staff2.userId));
+    expect(await sendStockKeeperReminders(db, sender, NOW)).toBe(0);
   });
 });

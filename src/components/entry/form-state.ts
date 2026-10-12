@@ -102,6 +102,10 @@ export function payload(kind: FormKind, f: FormState, src: EntrySource, applyUnm
     lrNumber: kind === "dispatch" ? f.lrNumber.trim() || null : null,
     notes: f.notes.trim() || null,
     applyUnmatched,
+    learn: [
+      ...(f.partyId && f.partyMention && !isStock(kind) ? [{ kind: "party" as const, id: f.partyId, mention: f.partyMention }] : []),
+      ...f.lines.filter((l) => l.itemId && l.mention).map((l) => ({ kind: "item" as const, id: l.itemId!, mention: l.mention! })),
+    ],
     lines: f.lines
       .filter((l) => l.itemId && l.quantity.trim())
       .map((l) => ({ itemId: l.itemId!, quantity: l.quantity.trim(), unit: l.unit ?? null, ...(l.orderLineId ? { orderLineId: l.orderLineId } : {}) })),

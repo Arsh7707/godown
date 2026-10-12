@@ -9,6 +9,7 @@
  *
  * Every table carries company_id.
  */
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   pgEnum,
@@ -50,6 +51,9 @@ const quantity = () => numeric("quantity", { precision: 12, scale: 2 }).notNull(
 export const companies = pgTable("companies", {
   id: id(),
   name: text("name").notNull(),
+  city: text("city"),
+  /** Indian state / UT name (see lib/india.ts). */
+  state: text("state"),
   createdAt: createdAt(),
 });
 
@@ -64,6 +68,10 @@ export const users = pgTable(
     role: roleEnum("role").notNull(),
     language: languageEnum("language").notNull().default("hi"),
     active: boolean("active").notNull().default(true),
+    city: text("city"),
+    state: text("state"),
+    /** Gets the daily "maal add kiya?" reminder. */
+    stockKeeper: boolean("stock_keeper").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("users_company_phone_uq").on(t.companyId, t.phone), index("users_phone_idx").on(t.phone)],
@@ -78,11 +86,20 @@ export const parties = pgTable(
     companyId: companyId(),
     name: text("name").notNull(),
     phone: text("phone"),
+    city: text("city"),
+    state: text("state"),
+    /** "gstin" | "aadhaar" | null. Aadhaar is stored in full but only shown masked (owners can reveal). */
+    taxIdType: text("tax_id_type"),
+    taxId: text("tax_id"),
     active: boolean("active").notNull().default(true),
     createdBy: createdBy(),
     createdAt: createdAt(),
   },
-  (t) => [index("parties_company_idx").on(t.companyId)],
+  (t) => [
+    index("parties_company_idx").on(t.companyId),
+    // A GSTIN belongs to one business; Aadhaar may repeat (one person, two shops).
+    uniqueIndex("parties_company_gstin_uq").on(t.companyId, t.taxId).where(sql`${t.taxIdType} = 'gstin'`),
+  ],
 );
 
 export const partyAliases = pgTable(

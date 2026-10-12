@@ -57,6 +57,13 @@
       "when": 1791755611062,
       "tag": "0007_push_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791840626721,
+      "tag": "0008_profiles",
+      "breakpoints": true
     }
   ]
 }

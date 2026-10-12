@@ -39,6 +39,8 @@ export interface PipelineInput {
   text?: string | null;
   image?: { data: Buffer; mimeType: string };
   audio?: { data: Buffer; mimeType: string };
+  /** Date for entries that don't say one (a past day picked in History); defaults to today. */
+  defaultDate?: string;
 }
 
 const weekdayFmt = new Intl.DateTimeFormat("en-IN", { timeZone: TZ, weekday: "long" });
@@ -103,7 +105,8 @@ export async function runExtraction(deps: PipelineDeps, input: PipelineInput): P
       signal,
     );
 
-    const { entries, issues } = buildEntries(input.kind, out, input.catalog, { today, now, sourceText });
+    const defaultDate = input.defaultDate && input.defaultDate < today ? input.defaultDate : undefined;
+    const { entries, issues } = buildEntries(input.kind, out, input.catalog, { today, now, sourceText, defaultDate });
     return {
       ok: true,
       entries,
@@ -121,7 +124,7 @@ export async function runExtraction(deps: PipelineDeps, input: PipelineInput): P
       ok: false,
       reason: err.reason,
       message: err.message,
-      draft: emptyDraft(input.kind, today, sourceText),
+      draft: emptyDraft(input.kind, input.defaultDate && input.defaultDate < today ? input.defaultDate : today, sourceText),
       durationMs: Date.now() - started,
     };
   }

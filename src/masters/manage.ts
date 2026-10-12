@@ -16,6 +16,7 @@ import { centiToDecimal, toCenti } from "@/lib/qty";
 import type { Ctx } from "@/ledger/service";
 import { stockOverview } from "@/stock/service";
 import { createItem, variantName } from "./service";
+import { partyProfileSet, safeTaxId, type PartyProfileInput } from "./profiles";
 
 function requireOwner(ctx: Ctx) {
   if (ctx.role !== "owner") throw new LedgerError("FORBIDDEN", "Only owners can change clients and items");
@@ -57,7 +58,17 @@ export async function partiesForManage(db: Db, ctx: Ctx) {
     db.select().from(parties).where(eq(parties.companyId, ctx.companyId)).orderBy(asc(parties.name)),
     db.select().from(partyAliases).where(eq(partyAliases.companyId, ctx.companyId)),
   ]);
-  return ps.map((p) => ({ id: p.id, name: p.name, phone: p.phone, active: p.active, aliases: as.filter((a) => a.partyId === p.id).map((a) => ({ id: a.id, alias: a.alias })) }));
+  return ps.map((p) => ({
+    id: p.id,
+    name: p.name,
+    phone: p.phone,
+    city: p.city,
+    state: p.state,
+    taxIdType: p.taxIdType as "gstin" | "aadhaar" | null,
+    /** GSTIN in full, Aadhaar masked. */
+    taxId: safeTaxId(p.taxIdType, p.taxId),
+    active: p.active,
+    aliases: as.filter((a) => a.partyId === p.id).map((a) => ({ id: a.id, alias: a.alias })) }));
 }
 
 async function assertNameFree(db: Db, ctx: Ctx, table: "party" | "item", name: string, exceptId: string) {
@@ -81,7 +92,7 @@ async function addAliasRow(db: Db, ctx: Ctx, kind: "party" | "item", ownerId: st
   }
 }
 
-export async function updateParty(db: Db, ctx: Ctx, partyId: string, input: { name?: string; phone?: string | null; active?: boolean }) {
+export async function updateParty(db: Db, ctx: Ctx, partyId: string, input: { name?: string; phone?: string | null; active?: boolean } & PartyProfileInput) {
   requireOwner(ctx);
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(parties).where(and(eq(parties.id, partyId), eq(parties.companyId, ctx.companyId)));
@@ -90,16 +101,26 @@ export async function updateParty(db: Db, ctx: Ctx, partyId: string, input: { na
     if (name !== undefined && !name) throw new LedgerError("NAME_REQUIRED", "Name is required");
     const renamed = name && normalizeName(name) !== normalizeName(before.name);
     if (renamed) await assertNameFree(tx, ctx, "party", name, partyId);
-    await tx
-      .update(parties)
-      .set({ ...(name ? { name } : {}), ...(input.phone !== undefined ? { phone: input.phone?.trim() || null } : {}), ...(input.active !== undefined ? { active: input.active } : {}) })
-      .where(eq(parties.id, partyId));
+    const profile = partyProfileSet(input, before.state);
+    try {
+      await tx
+        .update(parties)
+        .set({ ...(name ? { name } : {}), ...(input.phone !== undefined ? { phone: input.phone?.trim() || null } : {}), ...(input.active !== undefined ? { active: input.active } : {}), ...profile })
+        .where(eq(parties.id, partyId));
+    } catch (e) {
+      if (isUnique(e)) throw new LedgerError("TAX_ID_TAKEN", "This GSTIN is already saved for another client");
+      throw e;
+    }
     if (renamed) {
       // Keep the old name so slips and voice notes that use it still match.
       const [taken] = await tx.select({ id: partyAliases.id }).from(partyAliases).where(and(eq(partyAliases.companyId, ctx.companyId), eq(partyAliases.normalized, normalizeName(before.name))));
       if (!taken) await addAliasRow(tx, ctx, "party", partyId, before.name);
     }
-    await log(tx, ctx, "party.update", "party", partyId, { before: { name: before.name, phone: before.phone, active: before.active }, after: input });
+    const safe = (x: { city?: string | null; state?: string | null; taxIdType?: string | null; taxId?: string | null }) => ({ city: x.city, state: x.state, taxId: safeTaxId(x.taxIdType, x.taxId) });
+    await log(tx, ctx, "party.update", "party", partyId, {
+      before: { name: before.name, phone: before.phone, active: before.active, ...safe(before) },
+      after: { name: input.name, phone: input.phone, active: input.active, ...safe({ ...before, ...profile }) },
+    });
   });
 }
 

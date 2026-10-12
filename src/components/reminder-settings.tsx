@@ -12,8 +12,8 @@ function urlBase64ToBytes(s: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-/** Owners: turn reminders on for this phone. iPhone needs the app added to the Home Screen first. */
-export function ReminderSettings({ t }: { t: Messages }) {
+/** Owners and stock keepers: turn reminders on for this phone. iPhone needs the app added to the Home Screen first. */
+export function ReminderSettings({ t, owner }: { t: Messages; owner: boolean }) {
   const [state, setState] = useState<State>("loading");
   const [key, setKey] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -94,7 +94,7 @@ export function ReminderSettings({ t }: { t: Messages }) {
       ) : (
         <>
           <p className="mt-1 text-sm text-stone-600">
-            {state === "installFirst" ? t.n.installFirst : state === "blocked" ? t.n.blocked : state === "notReady" ? t.n.notReady : t.n.hint}
+            {state === "installFirst" ? t.n.installFirst : state === "blocked" ? t.n.blocked : state === "notReady" ? t.n.notReady : owner ? t.n.hint : t.n.hintKeeper}
           </p>
           {(state === "off" || state === "busy") && (
             <button className={`${btn} mt-3 w-full bg-[#1f4e79] py-3.5 text-lg text-white disabled:opacity-50`} disabled={state === "busy"} onClick={turnOn}>

@@ -56,6 +56,23 @@ export default async function PartyPendingPage({ params }: PageProps<"/pending/p
     <>
       <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/pending" title={data.party.name} />
       <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 py-4">
+        {(data.party.city || data.party.state || data.party.taxId) && (
+          <div className="flex items-start justify-between gap-3 rounded-2xl bg-white p-4 text-sm text-stone-600 shadow-sm">
+            <div className="space-y-0.5">
+              {(data.party.city || data.party.state) && <p>📍 {[data.party.city, data.party.state].filter(Boolean).join(", ")}</p>}
+              {data.party.taxId && (
+                <p className="font-mono">
+                  {data.party.taxIdType === "gstin" ? t.m.gstin : t.m.aadhaar}: {data.party.taxId}
+                </p>
+              )}
+            </div>
+            {user.role === "owner" && (
+              <Link href={`/manage/clients/${data.party.id}`} className="shrink-0 font-semibold text-[#1f4e79] underline">
+                ✏️
+              </Link>
+            )}
+          </div>
+        )}
         <h2 className="font-semibold text-stone-600">{t.p.openOrders}</h2>
         {data.open.length ? data.open.map((o) => card(o, false)) : <p className="text-stone-500">{t.p.nothingPending}</p>}
         {data.closed.length > 0 && (

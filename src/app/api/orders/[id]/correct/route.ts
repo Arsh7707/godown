@@ -3,7 +3,7 @@ import { ctxFor } from "@/auth/session";
 import { correctOrder } from "@/ledger/service";
 import { buildShare } from "@/entries/save";
 import { fail, json, withUser } from "@/lib/api";
-import { afterStockChange } from "@/notify/hooks";
+import { afterStaffAction, afterStockChange } from "@/notify/hooks";
 
 interface Body {
   baseRev?: number;
@@ -31,6 +31,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/orders/[
       lines: b.lines,
     });
     afterStockChange(user);
+    afterStaffAction(user, { action: "order.edit", partyId: b.partyId, lines: b.lines, url: `/orders/${id}` });
     return json({ ok: true, rev: r.rev, share: await buildShare(user, "order", b.partyId, b.lines) });
   });
 }

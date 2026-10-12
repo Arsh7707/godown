@@ -35,6 +35,8 @@ export type OutboxItem =
       blobKind?: "slip_photo" | "voice_note";
       text?: string;
       audioSeconds?: number;
+      /** A past day picked in History, for entries that don't say a date. */
+      defaultDate?: string;
       attachmentId?: string;
       state: "queued" | "read" | "failed";
       error?: string;
@@ -131,6 +133,7 @@ export async function sync(): Promise<void> {
             imageAttachmentId: item.blobKind === "slip_photo" ? attachmentId : undefined,
             audioAttachmentId: item.blobKind === "voice_note" ? attachmentId : undefined,
             audioSeconds: item.audioSeconds,
+            defaultDate: item.defaultDate,
           });
           // The stored reading is fetched again (free, idempotent) when the user opens it from the Inbox.
           await tx("readwrite", (s) => s.put(r.ok ? { ...item, attachmentId, blob: undefined, state: "read" } : { ...item, attachmentId, state: "failed", error: r.code }));

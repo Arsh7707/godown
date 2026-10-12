@@ -10,6 +10,14 @@ import { matchMention } from "./matcher";
 import type { Entry, EntryKind, ModelOutput } from "./schema";
 import type { Catalog, Draft, DraftEntry, DraftLine, Issue } from "./types";
 
+export interface EntryContext {
+  today: string;
+  now: Date;
+  sourceText: string | null;
+  /** Date for entries that don't say one: today, or a past day picked in History. */
+  defaultDate?: string;
+}
+
 export function emptyDraft(kind: EntryKind, today: string, sourceText: string | null): Draft {
   return {
     kind,
@@ -35,10 +43,11 @@ function buildEntry(
   e: Entry,
   language: ModelOutput["language"],
   catalog: Catalog,
-  ctx: { today: string; now: Date; sourceText: string | null },
+  ctx: EntryContext,
 ): DraftEntry {
   const issues: Issue[] = [];
-  const draft = emptyDraft(kind, ctx.today, ctx.sourceText);
+  const fallbackDate = ctx.defaultDate ?? ctx.today;
+  const draft = emptyDraft(kind, fallbackDate, ctx.sourceText);
   draft.language = language;
   draft.summary = displayScript(e.summary.trim()) || null;
   draft.notes = e.notes?.trim() ? displayScript(e.notes.trim()) : null;
@@ -79,12 +88,13 @@ function buildEntry(
     if (!isValidDate(e.entry_date.iso)) {
       issues.push({ code: "DATE_INVALID", blocking: true, detail: e.entry_date.as_written ?? e.entry_date.iso });
     } else {
-      draft.entryDate = e.entry_date.iso;
-      draft.entryDateStated = true;
       try {
         assertEntryDate(e.entry_date.iso, ctx.now);
+        draft.entryDate = e.entry_date.iso;
+        draft.entryDateStated = true;
       } catch {
-        issues.push({ code: "ENTRY_DATE_FUTURE", blocking: true, detail: e.entry_date.as_written ?? e.entry_date.iso });
+        // A date in the future can't be right: keep today's (or the chosen day's) date and say so.
+        issues.push({ code: "ENTRY_DATE_FUTURE", blocking: false, detail: e.entry_date.as_written ?? e.entry_date.iso });
       }
     }
   }
@@ -138,7 +148,7 @@ export function buildEntries(
   kind: EntryKind,
   out: ModelOutput,
   catalog: Catalog,
-  ctx: { today: string; now: Date; sourceText: string | null },
+  ctx: EntryContext,
 ): { entries: DraftEntry[]; issues: Issue[] } {
   const issues: Issue[] = [];
   for (const u of out.unreadable) issues.push({ code: "UNREADABLE", blocking: false, detail: displayScript(u) });

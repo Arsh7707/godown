@@ -7,18 +7,21 @@
  *   low level. Fires once per crossing; it re-arms when stock recovers.
  * - Over stock (owners, instant): a dispatch leaves an item with less than
  *   zero in stock, i.e. someone pressed "Send anyway".
+ * - Staff activity (owners, instant): a staff member created, changed or
+ *   cancelled an entry, or added a client / item.
+ * - Stock keeper (11 AM): "maal add kiya?" unless goods in was entered today.
  * The person who made the entry isn't alerted about their own entry.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/types";
-import { companies, items, parties, stockAlertState } from "@/db/schema";
+import { companies, items, parties, stockAlertState, stockMovements, users } from "@/db/schema";
 import { daysOld, isOverdue, unmatched } from "@/ledger/domain";
 import { loadState } from "@/ledger/state";
 import { stockLevels, stockOverview, type StockRow } from "@/stock/service";
 import { todayIST } from "@/lib/dates";
 import { formatQty } from "@/lib/qty";
 import { unitKey, unitLabel } from "@/lib/units";
-import { pushText } from "./text";
+import { pushText, type StaffAction } from "./text";
 import { notifyUsers, ownerIds, type PushSender } from "./push";
 
 const LIST = 3;
@@ -160,3 +163,69 @@ export async function checkOverStock(
   return short;
 }
 
+
+export interface StaffEvent {
+  action: StaffAction;
+  /** Client the entry is for, when there is one. */
+  partyId?: string | null;
+  /** Lines as entered (for create / edit). */
+  lines?: { itemId: string; quantity: string | number; unit?: string | null }[];
+  /** For new clients / items: the name. */
+  name?: string;
+  url: string;
+}
+
+/** A staff member created, changed or cancelled something: tell the owners right away. */
+export async function notifyStaffActivity(db: Db, send: PushSender | null, actor: { companyId: string; userId: string; name: string; role: string }, ev: StaffEvent) {
+  if (actor.role !== "staff" || !send) return 0;
+  const itemIds = [...new Set((ev.lines ?? []).map((l) => l.itemId))];
+  const [its, party] = await Promise.all([
+    itemIds.length ? db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(inArray(items.id, itemIds)) : Promise.resolve([]),
+    ev.partyId ? db.select({ name: parties.name }).from(parties).where(eq(parties.id, ev.partyId)).then((r) => r[0]) : Promise.resolve(undefined),
+  ]);
+  const item = new Map(its.map((i) => [i.id, i]));
+  const what = (ev.lines ?? []).map((l) => {
+    const i = item.get(l.itemId);
+    return `${i?.name ?? "?"} ${String(l.quantity).trim()} ${unitLabel(l.unit ?? null, i?.unit ?? "")}`;
+  });
+  const owners = await ownerIds(db, actor.companyId, actor.userId);
+  return notifyUsers(db, send, actor.companyId, owners, (u) => {
+    const t = pushText(u.language);
+    const head = [party?.name ?? ev.name, listWithMore(what, t.more)].filter(Boolean).join(": ");
+    return { title: `${actor.name} · ${t.act[ev.action]}`, body: head, url: ev.url, tag: `staff-${ev.action}-${Date.now()}` };
+  });
+}
+
+/**
+ * 11 AM: remind each stock keeper to enter goods in, unless someone in the
+ * company already entered goods in today (IST).
+ */
+export async function sendStockKeeperReminders(db: Db, send: PushSender, now = new Date()) {
+  const today = todayIST(now);
+  let sent = 0;
+  for (const c of await db.select({ id: companies.id }).from(companies)) {
+    const keepers = (
+      await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.companyId, c.id), eq(users.stockKeeper, true), eq(users.active, true)))
+    ).map((u) => u.id);
+    if (!keepers.length) continue;
+    const [{ n }] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(stockMovements)
+      .where(
+        and(
+          eq(stockMovements.companyId, c.id),
+          eq(stockMovements.kind, "receipt"),
+          sql`(${stockMovements.createdAt} at time zone 'Asia/Kolkata')::date = ${today}::date`,
+        ),
+      );
+    if (n > 0) continue;
+    sent += await notifyUsers(db, send, c.id, keepers, (u) => {
+      const t = pushText(u.language);
+      return { title: t.stockTitle, body: t.stockBody, url: "/stock/in", tag: "stock-keeper" };
+    });
+  }
+  return sent;
+}

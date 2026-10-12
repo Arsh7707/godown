@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Messages } from "@/i18n/messages";
 import { NetworkError, postJson } from "@/client/api";
 import { errorText } from "./entry/entry-form";
+import { STATE_NAMES } from "@/lib/india";
 
 export const mfield = "w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg outline-none focus:border-[#1f4e79] disabled:bg-stone-100 disabled:text-stone-500";
 export const mlabel = "block text-sm font-medium text-stone-600";
@@ -85,6 +86,29 @@ export function HideDelete({ t, active, canDelete, onToggle, onDelete, busy }: {
       <p className="text-xs text-stone-500">
         {t.m.hideHint} {canDelete ? "" : t.m.cantDelete}
       </p>
+    </div>
+  );
+}
+
+/** City + state (Indian states/UTs, or "Outside India"). */
+export function PlaceFields({ t, city, state, onCity, onState }: { t: Messages; city: string; state: string; onCity: (v: string) => void; onState: (v: string) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <label className="block space-y-1.5">
+        <span className={mlabel}>{t.m.city}</span>
+        <input value={city} onChange={(e) => onCity(e.target.value)} className={mfield} autoComplete="address-level2" />
+      </label>
+      <label className="block space-y-1.5">
+        <span className={mlabel}>{t.m.state}</span>
+        <select value={state} onChange={(e) => onState(e.target.value)} className={`${mfield} px-2`}>
+          <option value="">{t.m.pickState}</option>
+          {STATE_NAMES.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }

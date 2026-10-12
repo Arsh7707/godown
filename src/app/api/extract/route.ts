@@ -6,7 +6,7 @@ import { emptyDraft } from "@/extraction/draft";
 import type { ExtractionResult } from "@/extraction/types";
 import { storage } from "@/storage";
 import { overDailyLimit, recordClaudeUsage, recordSpeechUsage } from "@/entries/usage";
-import { todayIST } from "@/lib/dates";
+import { isValidDate, todayIST } from "@/lib/dates";
 import { fail, json, withUser } from "@/lib/api";
 
 // Transcription + reading can take ~30s on long voice notes.
@@ -20,6 +20,8 @@ interface Body {
   imageAttachmentId?: string;
   audioAttachmentId?: string;
   audioSeconds?: number;
+  /** YYYY-MM-DD: a past day picked in History, used when the input doesn't say a date. */
+  defaultDate?: string;
 }
 
 /**
@@ -58,7 +60,7 @@ export async function POST(req: Request) {
       const usage: Promise<unknown>[] = [];
       const deps = defaultDeps({ onUsage: (u, model) => usage.push(recordClaudeUsage(user.companyId, user.userId, b.captureId!, u, model)) });
       const [image, audio] = await Promise.all([att(b.imageAttachmentId), att(b.audioAttachmentId)]);
-      result = await runExtraction(deps, { kind: b.kind, catalog, text: b.text, image, audio });
+      result = await runExtraction(deps, { kind: b.kind, catalog, text: b.text, image, audio, defaultDate: b.defaultDate && isValidDate(b.defaultDate) ? b.defaultDate : undefined });
       if (audio && b.audioSeconds) usage.push(recordSpeechUsage(user.companyId, user.userId, b.captureId, Math.min(b.audioSeconds, 600)));
       await Promise.all(usage);
     }

@@ -12,10 +12,10 @@ interface Body {
   keys?: { p256dh?: string; auth?: string };
 }
 
-/** This phone wants reminders. Owners only: they are the ones reminders go to. */
+/** This phone wants reminders. Owners and stock keepers: they are the ones reminders go to. */
 export async function POST(req: Request) {
   return withUser(async (user) => {
-    if (user.role !== "owner") return fail("FORBIDDEN", 403);
+    if (user.role !== "owner" && !user.stockKeeper) return fail("FORBIDDEN", 403);
     const b = (await req.json().catch(() => ({}))) as Body;
     if (!b.endpoint?.startsWith("https://") || !b.keys?.p256dh || !b.keys.auth) return fail("INCOMPLETE");
     await saveSubscription(db, user, { endpoint: b.endpoint, p256dh: b.keys.p256dh, auth: b.keys.auth }, req.headers.get("user-agent"));

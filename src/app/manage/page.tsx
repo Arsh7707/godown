@@ -21,6 +21,14 @@ export default async function ManagePage() {
           <span className="block text-2xl font-bold">🏷️ {t.m.items}</span>
           <span className="block text-stone-500">{t.m.itemsHint}</span>
         </Link>
+        <Link href="/manage/team" className={tile}>
+          <span className="block text-2xl font-bold">🧑‍🤝‍🧑 {t.m.team}</span>
+          <span className="block text-stone-500">{t.m.teamHint}</span>
+        </Link>
+        <Link href="/manage/company" className={tile}>
+          <span className="block text-2xl font-bold">🏢 {t.m.company}</span>
+          <span className="block text-stone-500">{t.m.companyHint}</span>
+        </Link>
       </main>
     </>
   );

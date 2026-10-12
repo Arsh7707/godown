@@ -7,7 +7,8 @@ import { stockShareText, whatsappUrl } from "@/entries/share";
 import type { InputMethod } from "@/ledger/service";
 import { fail, json, withUser } from "@/lib/api";
 import { unitLabel } from "@/lib/units";
-import { afterStockChange } from "@/notify/hooks";
+import { afterLearn, afterStaffAction, afterStockChange } from "@/notify/hooks";
+import { picksFrom } from "@/masters/learn";
 
 interface Body {
   entryCaptureId?: string;
@@ -19,6 +20,7 @@ interface Body {
   sourceAttachmentId?: string | null;
   sourceText?: string | null;
   lines?: { itemId: string; quantity: string; unit?: string | null }[];
+  learn?: unknown;
 }
 
 /** Goods in, a stock count, or an adjustment. */
@@ -43,7 +45,11 @@ export async function POST(req: Request) {
         .set({ status: "confirmed", updatedAt: new Date() })
         .where(and(eq(captures.companyId, user.companyId), eq(captures.captureId, b.captureId)));
     }
-    if (!r.duplicate) afterStockChange(user);
+    if (!r.duplicate) {
+      afterStockChange(user);
+      afterLearn(user, picksFrom(b));
+      afterStaffAction(user, { action: `stock.${b.kind!}`, lines: b.lines, url: "/stock" });
+    }
     if (r.duplicate) return json({ ok: true, duplicate: true, share: null });
     const its = await db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(inArray(items.id, r.lines.map((l) => l.itemId)));
     const item = new Map(its.map((i) => [i.id, i]));

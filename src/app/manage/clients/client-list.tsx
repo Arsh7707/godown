@@ -8,7 +8,7 @@ import { mfield, useManage } from "@/components/manage-ui";
 
 const norm = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, "");
 
-export function ClientList({ lang, list }: { lang: Lang; list: { id: string; name: string; phone: string | null; active: boolean; aliases: { alias: string }[] }[] }) {
+export function ClientList({ lang, list }: { lang: Lang; list: { id: string; name: string; phone: string | null; city: string | null; active: boolean; aliases: { alias: string }[] }[] }) {
   const t = messages(lang);
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -41,7 +41,7 @@ export function ClientList({ lang, list }: { lang: Lang; list: { id: string; nam
           <p className="text-lg font-bold">
             {p.name} {!p.active && <span className="text-sm font-normal text-stone-500">· {t.m.hidden}</span>}
           </p>
-          <p className="truncate text-sm text-stone-500">{[p.phone, ...p.aliases.map((a) => a.alias)].filter(Boolean).join(" · ") || "—"}</p>
+          <p className="truncate text-sm text-stone-500">{[p.city, p.phone, ...p.aliases.map((a) => a.alias)].filter(Boolean).join(" · ") || "—"}</p>
         </Link>
       ))}
     </main>

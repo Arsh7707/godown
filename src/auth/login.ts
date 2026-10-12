@@ -114,6 +114,8 @@ export interface SessionUser {
   phone: string;
   role: "owner" | "staff" | "viewer";
   language: "hi" | "en";
+  /** Gets the daily "maal add kiya?" reminder. */
+  stockKeeper: boolean;
 }
 
 export async function userForToken(db: Db, token: string, now = new Date()): Promise<SessionUser | null> {
@@ -131,6 +133,7 @@ export async function userForToken(db: Db, token: string, now = new Date()): Pro
       role: users.role,
       language: users.language,
       active: users.active,
+      stockKeeper: users.stockKeeper,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
@@ -150,6 +153,7 @@ export async function userForToken(db: Db, token: string, now = new Date()): Pro
     phone: row.phone,
     role: row.role,
     language: row.language,
+    stockKeeper: row.stockKeeper,
   };
 }
 

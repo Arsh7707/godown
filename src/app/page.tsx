@@ -51,6 +51,10 @@ export default async function Home() {
             <span className="block text-xl font-bold">📦 {t.s.title}</span>
             <span className="block text-sm text-stone-500">{t.s.hint}</span>
           </Link>
+          <Link href="/history" className="col-span-2 rounded-2xl border-2 border-stone-300 bg-white px-4 py-4 shadow-sm active:scale-[.99]">
+            <span className="block text-xl font-bold">📅 {t.h.title}</span>
+            <span className="block text-sm text-stone-500">{t.h.hint}</span>
+          </Link>
           {user.role === "owner" && (
             <Link href="/manage" className="col-span-2 rounded-2xl border-2 border-stone-300 bg-white px-4 py-4 shadow-sm active:scale-[.99]">
               <span className="block text-xl font-bold">⚙️ {t.m.title}</span>
@@ -59,7 +63,7 @@ export default async function Home() {
           )}
         </div>
         <InstallPrompt t={t} />
-        {user.role === "owner" && <ReminderSettings t={t} />}
+        {(user.role === "owner" || user.stockKeeper) && <ReminderSettings t={t} owner={user.role === "owner"} />}
         <div className="mt-auto">
           <LogoutButton label={t.logout} />
         </div>

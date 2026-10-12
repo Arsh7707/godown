@@ -22,6 +22,12 @@ interface Capture {
   inputMethod: "photo" | "voice" | "text";
   attachmentId: string | null;
 }
+type BatchReady = { attachmentId: string } | { error: "network" | "other" };
+interface BatchPhoto {
+  captureId: string;
+  blob: Promise<Blob>;
+  ready: Promise<BatchReady>;
+}
 type EntryStatus = { state: "open" } | { state: "saved"; outcome: SaveOutcome } | { state: "skipped" };
 
 type Step =
@@ -41,10 +47,13 @@ export function EntryScreen({
   fix,
   shared,
   prefill,
+  day,
 }: {
   kind: Kind;
   lang: Lang;
   today: string;
+  /** A past day picked in History: the date for new entries that don't say one. */
+  day?: string;
   resume?: string;
   fix?: string;
   shared?: string;
@@ -52,6 +61,7 @@ export function EntryScreen({
   prefill?: FormState;
 }) {
   const t = messages(lang);
+  const startDate = day ?? today;
   const online = useAutoSync();
   const { catalog, addParty, addItem } = useCatalog();
   const [step, setStep] = useState<Step>(() =>
@@ -60,13 +70,16 @@ export function EntryScreen({
       : { s: "capture" },
   );
   const [text, setText] = useState("");
+  // Several photos chosen at once: which one is showing (null = not in a batch).
+  const batch = useRef<BatchPhoto[] | null>(null);
+  const [photoPos, setPhotoPos] = useState<{ i: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const itemById = useMemo(() => new Map(catalog.items.map((i) => [i.id, i])), [catalog.items]);
 
   const manualForm = (back: Step | null = { s: "capture" }) =>
     setStep({
       s: "form",
-      initial: emptyForm(today),
+      initial: emptyForm(startDate),
       source: { entryCaptureId: newId(), captureId: null, inputMethod: "form", sourceAttachmentId: null, sourceText: null },
       issues: [],
       back,
@@ -80,7 +93,7 @@ export function EntryScreen({
       setError(null);
       let result: ExtractionResult;
       try {
-        const r = await postJson<{ result: ExtractionResult }>("/api/extract", { captureId: capture.captureId, kind: extractionKind(kind), inputMethod: capture.inputMethod, ...body });
+        const r = await postJson<{ result: ExtractionResult }>("/api/extract", { captureId: capture.captureId, kind: extractionKind(kind), inputMethod: capture.inputMethod, defaultDate: day, ...body });
         if (!r.ok) throw new Error(r.code);
         result = r.result;
       } catch (e) {
@@ -91,7 +104,7 @@ export function EntryScreen({
         setError(t.e.readFailed);
         setStep({
           s: "form",
-          initial: emptyForm(today),
+          initial: emptyForm(startDate),
           source: { entryCaptureId: `${capture.captureId}-0`, captureId: capture.captureId, inputMethod: capture.inputMethod, sourceAttachmentId: capture.attachmentId, sourceText: (body.text as string) ?? null },
           issues: [],
           back: null,
@@ -103,7 +116,7 @@ export function EntryScreen({
         setError(t.e.readFailed);
         setStep({
           s: "form",
-          initial: { ...emptyForm(today), notes: "" },
+          initial: { ...emptyForm(startDate), notes: "" },
           source: { entryCaptureId: `${capture.captureId}-0`, captureId: capture.captureId, inputMethod: capture.inputMethod, sourceAttachmentId: capture.attachmentId, sourceText: result.draft.sourceText },
           issues: [],
           back: null,
@@ -114,7 +127,7 @@ export function EntryScreen({
       setStep({ s: "review", capture, result, status: result.entries.map(() => ({ state: "open" })) });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [kind, t, today],
+    [kind, t, today, day],
   );
 
   /** No internet: keep the capture on the phone; it is read when back online and waits in the Inbox. */
@@ -130,6 +143,7 @@ export function EntryScreen({
       blobKind: blobKind ?? (capture.inputMethod === "photo" ? "slip_photo" : capture.inputMethod === "voice" ? "voice_note" : undefined),
       text: body.text as string | undefined,
       audioSeconds: body.audioSeconds as number | undefined,
+      defaultDate: day,
       state: "queued",
     });
     setStep({ s: "queuedCapture" });
@@ -142,13 +156,13 @@ export function EntryScreen({
       const item = await outboxGet((resume ?? fix)!);
       if (!item) return;
       if (item.type === "capture") {
-        await read({ captureId: item.captureId, inputMethod: item.inputMethod, attachmentId: item.attachmentId ?? null }, { text: item.text });
+        await read({ captureId: item.captureId, inputMethod: item.inputMethod, attachmentId: item.attachmentId ?? null }, { text: item.text, defaultDate: item.defaultDate });
       } else {
         const b = item.body as ReturnType<typeof payload>;
         setStep({
           s: "form",
           initial: {
-            ...emptyForm(today),
+            ...emptyForm(startDate),
             partyId: b.partyId,
             date: b.date,
             promisedDate: b.promisedDate ?? "",
@@ -176,8 +190,7 @@ export function EntryScreen({
       const item = await readShared(shared);
       if (!item) return;
       await clearShared(shared);
-      const file = item.files[0];
-      if (file) await onImport(file);
+      if (item.files.length) await onImportMany(item.files);
       else if (item.text.trim()) await read({ captureId: newId(), inputMethod: "text", attachmentId: null }, { text: item.text.trim() });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,6 +240,76 @@ export function EntryScreen({
     setError(t.e.importUnsupported);
   }
 
+  /** Several files at once (gallery, import, or shared from WhatsApp): photos are read one by one; otherwise the first file. */
+  async function onImportMany(files: File[]) {
+    const photos = files.filter((f) => f.type.startsWith("image/"));
+    if (photos.length > 1) return startPhotoBatch(photos);
+    return onImport(photos[0] ?? files[0]);
+  }
+
+  /**
+   * Several photos: each is its own slip. All are uploaded and read in the
+   * background, one after another, while the first one is checked; moving to
+   * the next photo then just shows its (already stored) reading.
+   */
+  function startPhotoBatch(files: File[]) {
+    let prev: Promise<unknown> = Promise.resolve();
+    const list: BatchPhoto[] = files.map((f) => {
+      const captureId = newId();
+      const blob = compressImage(f).catch(() => f as Blob);
+      const ready = prev.then(async (): Promise<BatchReady> => {
+        try {
+          const b = await blob;
+          const attachmentId = await upload(captureId, "slip_photo", b);
+          await postJson("/api/extract", { captureId, kind: extractionKind(kind), inputMethod: "photo", imageAttachmentId: attachmentId, defaultDate: day });
+          return { attachmentId };
+        } catch (e) {
+          return { error: e instanceof NetworkError ? "network" : "other" };
+        }
+      });
+      prev = ready;
+      return { captureId, blob, ready };
+    });
+    batch.current = list;
+    void showPhoto(0);
+  }
+
+  async function showPhoto(i: number) {
+    const p = batch.current?.[i];
+    if (!p) {
+      batch.current = null;
+      setPhotoPos(null);
+      return;
+    }
+    setPhotoPos({ i, total: batch.current!.length });
+    setError(null);
+    setStep({ s: "busy", label: `${t.e.reading} (${t.e.photoOf} ${i + 1}/${batch.current!.length})` });
+    const r = await p.ready;
+    if ("attachmentId" in r) return read({ captureId: p.captureId, inputMethod: "photo", attachmentId: r.attachmentId }, { imageAttachmentId: r.attachmentId });
+    if (r.error === "network") return queueCapture({ captureId: p.captureId, inputMethod: "photo", attachmentId: null }, {}, await p.blob, "slip_photo");
+    setError(t.err.UNKNOWN);
+    setStep({ s: "capture" });
+  }
+
+  const nextPhoto = photoPos && photoPos.i + 1 < photoPos.total ? photoPos.i + 1 : null;
+  const photoBar = photoPos && step.s !== "busy" && (
+    <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-[#1f4e79]/10 px-4 py-2.5 font-semibold text-[#1f4e79]">
+      <span>
+        🖼️ {t.e.photoOf} {photoPos.i + 1}/{photoPos.total}
+      </span>
+      {nextPhoto !== null && step.s !== "done" && step.s !== "queuedCapture" && (
+        <button onClick={() => showPhoto(nextPhoto)} className="text-sm underline">
+          {t.e.skipPhoto} →
+        </button>
+      )}
+    </div>
+  );
+  const nextPhotoButton = nextPhoto !== null && (
+    <button onClick={() => showPhoto(nextPhoto)} className="w-full rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white">
+      🖼️ {t.e.nextPhoto} ({nextPhoto + 1}/{photoPos!.total}) →
+    </button>
+  );
+
   function sourceFor(capture: Capture, result: Extract<ExtractionResult, { ok: true }>, i: number): EntrySource {
     return {
       entryCaptureId: `${capture.captureId}-${i}`,
@@ -248,11 +331,14 @@ export function EntryScreen({
 
   // ---------------------------------------------------------------- render
 
-  const title = { order: t.e.newOrderTitle, dispatch: t.e.dispatchTitle, receipt: t.s.goodsIn, count: t.s.count }[kind];
+  const baseTitle = { order: t.e.newOrderTitle, dispatch: t.e.dispatchTitle, receipt: t.s.goodsIn, count: t.s.count }[kind];
+  // Entering for a past day (from History): say which day in the title.
+  const title = day ? `${baseTitle} · ${new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : baseTitle;
 
   if (step.s === "form") {
     return (
-      <Shell t={t} title={title} back={isStock(kind) ? "/stock" : "/"}>
+      <Shell t={t} title={title} back={day ? `/history?date=${day}` : isStock(kind) ? "/stock" : "/"}>
+        {photoBar}
         {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-amber-900">{error}</p>}
         {step.back?.s === "review" && step.entryIndex !== null && step.back.result.entries.length > 1 && (
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-400">
@@ -297,14 +383,16 @@ export function EntryScreen({
   }
 
   return (
-    <Shell t={t} title={title} back={isStock(kind) ? "/stock" : "/"}>
+    <Shell t={t} title={title} back={day ? `/history?date=${day}` : isStock(kind) ? "/stock" : "/"}>
       {!online && <p className="mb-4 rounded-xl bg-stone-800 p-3 text-sm text-white">{t.offline}</p>}
+      {photoBar}
       {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-amber-900">{error}</p>}
 
       {step.s === "queuedCapture" && (
         <div className="space-y-4 py-6 text-center">
           <p className="text-5xl">📥</p>
           <p className="text-lg">{t.e.queuedCapture}</p>
+          {nextPhotoButton}
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button onClick={() => setStep({ s: "capture" })} className="rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white">
               {t.e.another}
@@ -316,7 +404,8 @@ export function EntryScreen({
         </div>
       )}
 
-      {step.s === "capture" && <CapturePanel t={t} onPhoto={onPhoto} onVoice={onVoice} onImport={onImport} onType={() => setStep({ s: "typing" })} />}
+      {step.s === "capture" && nextPhotoButton && <div className="mb-4">{nextPhotoButton}</div>}
+      {step.s === "capture" && <CapturePanel t={t} onPhoto={onPhoto} onVoice={onVoice} onImport={onImportMany} onType={() => setStep({ s: "typing" })} />}
 
       {step.s === "typing" && (
         <div className="space-y-4">
@@ -411,10 +500,13 @@ export function EntryScreen({
               </div>
             ),
           )}
+          {nextPhotoButton}
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button
               onClick={() => {
                 setText("");
+                batch.current = null;
+                setPhotoPos(null);
                 setStep({ s: "capture" });
               }}
               className="rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white"
@@ -457,10 +549,11 @@ function CapturePanel({
   t: Messages;
   onPhoto: (f: File) => void;
   onVoice: (b: Blob, s: number) => void;
-  onImport: (f: File) => void;
+  onImport: (files: File[]) => void;
   onType: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const { state, elapsed, toggle } = useRecorder(onVoice);
   const tile = "flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl text-lg font-semibold shadow-sm select-none active:scale-[.98]";
@@ -471,7 +564,7 @@ function CapturePanel({
       <div className="grid grid-cols-3 gap-3">
         <button className={`${tile} bg-[#1f4e79] text-white`} onClick={() => fileRef.current?.click()}>
           <span className="text-4xl" aria-hidden>📷</span>
-          {t.e.photo}
+          {t.e.takePhoto}
         </button>
         <button
           className={`${tile} ${recording ? "scale-105 bg-red-600 text-white" : "bg-[#2e7d4f] text-white"}`}
@@ -488,6 +581,9 @@ function CapturePanel({
       </div>
       <p className="text-center text-stone-600">{recording ? t.e.releaseToSend : state === "tooShort" ? t.e.holdLonger : t.e.holdToRecord}</p>
       {state === "blocked" && <p className="rounded-xl bg-red-50 p-3 text-red-800">{t.e.micBlocked}</p>}
+      <button onClick={() => galleryRef.current?.click()} className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#1f4e79]/10 py-4 text-lg font-semibold text-[#1f4e79]">
+        🖼️ {t.e.gallery} <span className="text-sm font-normal">· {t.e.galleryHint}</span>
+      </button>
       <button onClick={() => importRef.current?.click()} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-stone-300 py-4 text-lg font-semibold text-stone-700">
         📎 {t.e.importFile}
       </button>
@@ -496,11 +592,24 @@ function CapturePanel({
         ref={importRef}
         type="file"
         accept="image/*,audio/*,.opus,.ogg,.m4a,.amr"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
+          const files = [...(e.target.files ?? [])];
           e.target.value = "";
-          if (f) onImport(f);
+          if (files.length) onImport(files);
+        }}
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = [...(e.target.files ?? [])];
+          e.target.value = "";
+          if (files.length) onImport(files);
         }}
       />
       <input

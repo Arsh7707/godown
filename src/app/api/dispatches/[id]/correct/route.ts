@@ -3,7 +3,7 @@ import { ctxFor } from "@/auth/session";
 import { correctDispatch } from "@/ledger/service";
 import { buildShare } from "@/entries/save";
 import { fail, json, withUser } from "@/lib/api";
-import { afterDispatch } from "@/notify/hooks";
+import { afterDispatch, afterStaffAction } from "@/notify/hooks";
 import { dispatchForEdit } from "@/ledger/queries";
 import { toCenti } from "@/lib/qty";
 import { unitKey } from "@/lib/units";
@@ -42,6 +42,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/dispatch
       reason: b.reason ?? null,
       lines: b.lines,
     });
+    afterStaffAction(user, { action: "dispatch.edit", partyId: b.partyId, lines: b.lines, url: `/dispatches/${id}` });
     afterDispatch(user, b.partyId, b.lines, new Set([...after].filter(([k, q]) => q > (before.get(k) ?? 0)).map(([k]) => k)));
     return json({ ok: true, rev: r.rev, plan: r.plan, share: await buildShare(user, "dispatch", b.partyId, b.lines) });
   });

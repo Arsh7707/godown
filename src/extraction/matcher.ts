@@ -6,9 +6,13 @@
  * automatically. Anything else returns up to 3 candidates for the user to
  * pick from, or none (create new). The model's catalog guess only raises a
  * candidate's rank; it never auto-selects.
+ *
+ * Candidates tolerate spelling mistakes, Hinglish spellings and Hindi vs
+ * English letters: names are also compared by how they sound (lib/translit).
  */
 import { normalizeName } from "@/lib/normalize";
 import { displayScript } from "@/lib/script";
+import { phoneticKey, skeletonKey } from "@/lib/translit";
 
 export interface CatalogEntry {
   id: string;
@@ -36,6 +40,8 @@ export type MatchResult =
   | { status: "missing"; mention: null; candidates: [] };
 
 const MIN_CANDIDATE_SCORE = 0.75;
+/** Sounds the same (शर्मा / Sharmaa / sarma): a strong suggestion, still not picked automatically. */
+const SOUNDS_SAME = 0.95;
 const GUESS_BOOST = 0.1;
 /** Courtesy words that are not part of the name: "M/s Sharma Textiles", "Sharma ji", "Shri Gupta". */
 const HONORIFICS = new Set(["ms", "messrs", "shri", "sri", "seth", "sethji", "ji", "jee", "जी", "श्री", "सेठ", "ਜੀ", "ਸ੍ਰੀ", "ਸ਼੍ਰੀ", "ਸੇਠ", "wala", "wale", "vala", "vale", "waale", "वाला", "वाले", "ਵਾਲਾ", "ਵਾਲੇ"]);
@@ -55,13 +61,20 @@ const COLOURS: Record<string, string> = {
   slaty: "grey", sleti: "grey", "स्लेटी": "grey", gray: "grey",
 };
 
+/** Short forms in business names. */
+const SHORT_FORMS: Record<string, string> = {
+  bros: "brothers", bro: "brother", co: "company", coy: "company", corp: "corporation", ent: "enterprises", entp: "enterprises",
+  ind: "industries", inds: "industries", tdrs: "traders", trdrs: "traders", mfg: "manufacturing", pvt: "private", ltd: "limited",
+  intl: "international", txt: "textiles", tex: "textiles", "&": "and", n: "and",
+};
+
 function stripHonorifics(s: string): string {
   // Compare across scripts: a Gurmukhi alias matches the same name in Hindi letters.
-  return normalizeName(displayScript(s))
+  return normalizeName(displayScript(s).replace(/&/g, " and "))
     .replace(/^m s /, "")
     .split(" ")
     .filter((w) => !HONORIFICS.has(w))
-    .map((w) => COLOURS[w] ?? w)
+    .map((w) => COLOURS[w] ?? SHORT_FORMS[w] ?? w)
     .join(" ");
 }
 const compact = (s: string) => stripHonorifics(s).replace(/\s+/g, "");
@@ -98,16 +111,30 @@ export function jaroWinkler(a: string, b: string): number {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
+const sound = (s: string) => phoneticKey(stripHonorifics(s));
+const outline = (s: string) => skeletonKey(stripHonorifics(s));
+const squash = (s: string) => s.replace(/\s+/g, "");
+
 /** Similarity of one mention form to one catalog key. */
-function similarity(mention: string, key: string): number {
+export function similarity(mention: string, key: string): number {
   const m = compact(mention);
   const k = compact(key);
   if (!m || !k) return 0;
   let score = jaroWinkler(m, k);
-  // "sharma" inside "sharma textiles": every word of the mention appears in the key.
+  // How it sounds, whatever the spelling or script: शर्मा ~ Sharmaa, Vistaraa ~ Vistara.
+  const ms = sound(mention);
+  const ks = sound(key);
+  if (ms && ks) {
+    if (squash(ms) === squash(ks)) score = Math.max(score, SOUNDS_SAME);
+    else score = Math.max(score, jaroWinkler(squash(ms), squash(ks)) * 0.97, jaroWinkler(squash(outline(mention)), squash(outline(key))) * 0.92);
+  }
+  // "sharma" inside "sharma textiles": every word of the mention appears in the key (also by sound).
   const mWords = stripHonorifics(mention).split(" ").filter(Boolean);
   const kWords = new Set(stripHonorifics(key).split(" "));
   if (mWords.length && mWords.every((w) => kWords.has(w))) score = Math.max(score, 0.85);
+  const mSound = ms.split(" ").filter(Boolean);
+  const kSound = new Set(ks.split(" "));
+  if (mSound.length && mSound.every((w) => kSound.has(w))) score = Math.max(score, 0.84);
   // Design numbers: "4012" vs "D-4012".
   const md = digits(mention);
   if (md.length >= 3 && md === digits(key)) score = Math.max(score, 0.9);
