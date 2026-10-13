@@ -5,10 +5,8 @@ import { stockOverview } from "@/stock/service";
 import { LiveRefresh } from "@/components/live-refresh";
 import { messages } from "@/i18n/messages";
 import { AppHeader } from "@/components/app-header";
-import { LogoutButton } from "@/components/logout-button";
 import { InstallPrompt } from "@/components/install-prompt";
 import { OutboxStatus } from "@/components/outbox-status";
-import { ReminderSettings } from "@/components/reminder-settings";
 
 export default async function Home() {
   const user = await requireUser();
@@ -21,7 +19,7 @@ export default async function Home() {
   ];
   return (
     <>
-      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} />
+      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} menu={{ role: user.role, stockKeeper: user.stockKeeper, lowCount: lowItems.length }} />
       <LiveRefresh seconds={30} />
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-5">
         <OutboxStatus t={t} />
@@ -42,31 +40,7 @@ export default async function Home() {
             </span>
           </Link>
         ))}
-        <div className="grid grid-cols-2 gap-3">
-          <Link href="/dispatches" className="rounded-2xl border-2 border-stone-300 bg-white px-4 py-4 shadow-sm active:scale-[.99]">
-            <span className="block text-xl font-bold">🚚 {t.d.title}</span>
-            <span className="block text-sm text-stone-500">{t.d.hint}</span>
-          </Link>
-          <Link href="/stock" className="rounded-2xl border-2 border-stone-300 bg-white px-4 py-4 shadow-sm active:scale-[.99]">
-            <span className="block text-xl font-bold">📦 {t.s.title}</span>
-            <span className="block text-sm text-stone-500">{t.s.hint}</span>
-          </Link>
-          <Link href="/history" className="col-span-2 rounded-2xl border-2 border-stone-300 bg-white px-4 py-4 shadow-sm active:scale-[.99]">
-            <span className="block text-xl font-bold">📅 {t.h.title}</span>
-            <span className="block text-sm text-stone-500">{t.h.hint}</span>
-          </Link>
-          {user.role === "owner" && (
-            <Link href="/manage" className="col-span-2 rounded-2xl border-2 border-stone-300 bg-white px-4 py-4 shadow-sm active:scale-[.99]">
-              <span className="block text-xl font-bold">⚙️ {t.m.title}</span>
-              <span className="block text-sm text-stone-500">{t.m.hint}</span>
-            </Link>
-          )}
-        </div>
         <InstallPrompt t={t} />
-        {(user.role === "owner" || user.stockKeeper) && <ReminderSettings t={t} owner={user.role === "owner"} />}
-        <div className="mt-auto">
-          <LogoutButton label={t.logout} />
-        </div>
       </main>
     </>
   );

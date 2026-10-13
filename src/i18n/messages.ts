@@ -329,6 +329,15 @@ const en = {
     willCancel: "This will cancel what is still to send.",
     changes: "Changes",
   },
+  // side menu
+  menu: {
+    open: "Open menu",
+    close: "Close menu",
+    home: "Home",
+    work: "Daily work",
+    records: "Records",
+    settings: "Settings",
+  },
   // history (any past day)
   h: {
     title: "History",
@@ -729,6 +738,14 @@ const hi: Messages = {
     noChange: "इसमें कोई बदलाव नहीं मिला। फिर कोशिश करें या 'बदलें' से करें।",
     willCancel: "इससे बाकी माल रद्द हो जाएगा।",
     changes: "बदलाव",
+  },
+  menu: {
+    open: "मेनू खोलें",
+    close: "मेनू बंद करें",
+    home: "होम",
+    work: "रोज़ का काम",
+    records: "रिकॉर्ड",
+    settings: "सेटिंग",
   },
   h: {
     title: "पुरानी एंट्री",
