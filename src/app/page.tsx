@@ -8,11 +8,12 @@ import { AppHeader } from "@/components/app-header";
 import { InstallPrompt } from "@/components/install-prompt";
 import { OutboxStatus } from "@/components/outbox-status";
 import { myFirms } from "@/masters/firms";
+import { unmatchedCount } from "@/ledger/unmatched";
 
 export default async function Home() {
   const user = await requireUser();
   const t = messages(user.language);
-  const [overview, firms] = await Promise.all([stockOverview(db, ctxFor(user)), myFirms(db, user)]);
+  const [overview, firms, unmatched] = await Promise.all([stockOverview(db, ctxFor(user)), myFirms(db, user), unmatchedCount(db, user.companyId)]);
   const lowItems = overview.filter((r) => r.low || r.inStock < 0);
   const tiles = [
     { href: "/order/new", label: t.newOrder, hint: t.newOrderHint, icon: "📝", cls: "bg-[#1f4e79] text-white" },
@@ -21,7 +22,7 @@ export default async function Home() {
   ];
   return (
     <>
-      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} menu={{ role: user.role, stockKeeper: user.stockKeeper, lowCount: lowItems.length, firms: firms.map((f) => ({ companyId: f.companyId, name: f.name, current: f.current })) }} />
+      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} menu={{ role: user.role, stockKeeper: user.stockKeeper, lowCount: lowItems.length, unmatchedCount: unmatched.lines, firms: firms.map((f) => ({ companyId: f.companyId, name: f.name, current: f.current })) }} />
       <LiveRefresh seconds={30} />
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-5">
         <OutboxStatus t={t} />
@@ -29,6 +30,12 @@ export default async function Home() {
           <Link href="/stock" className="flex items-center justify-between rounded-2xl bg-red-50 p-4 text-red-900">
             <span className="font-semibold">⚠ {lowItems.length} {t.s.lowCount}</span>
             <span className="truncate pl-3 text-sm">{lowItems.slice(0, 3).map((r) => r.name).join(", ")}</span>
+          </Link>
+        )}
+        {user.role === "owner" && unmatched.dispatches > 0 && (
+          <Link href="/unmatched" className="flex items-center justify-between rounded-2xl bg-amber-50 p-4 text-amber-950">
+            <span className="font-semibold">❓ {unmatched.dispatches} {t.u.homeBanner}</span>
+            <span className="text-sm underline">{t.u.settle}</span>
           </Link>
         )}
         {tiles.filter((tile) => user.role !== "viewer" || tile.href === "/pending").map((tile) => (

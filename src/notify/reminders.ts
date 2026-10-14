@@ -17,6 +17,7 @@ import type { Db } from "@/db/types";
 import { companies, items, parties, stockAlertState, stockMovements, users } from "@/db/schema";
 import { daysOld, isOverdue, unmatched } from "@/ledger/domain";
 import { loadState } from "@/ledger/state";
+import { dismissedLines } from "@/ledger/unmatched";
 import { stockLevels, stockOverview, type StockRow } from "@/stock/service";
 import { todayIST } from "@/lib/dates";
 import { formatQty } from "@/lib/qty";
@@ -47,7 +48,9 @@ export async function buildDigest(db: Db, companyId: string, today: string): Pro
     p.oldestDays = Math.max(p.oldestDays, daysOld(l, today));
     byParty.set(l.partyId, p);
   }
-  const unmatchedDispatches = new Set(state.dispatchLines.filter((d) => unmatched(d) > 0).map((d) => d.dispatchId)).size;
+  // Lines an owner marked "OK, nothing owed" don't come back every morning.
+  const ok = await dismissedLines(db, companyId);
+  const unmatchedDispatches = new Set(state.dispatchLines.filter((d) => unmatched(d) > 0 && !ok.has(d.dispatchLineId)).map((d) => d.dispatchId)).size;
   if (!byParty.size && !unmatchedDispatches) return null;
 
   const names = byParty.size
@@ -68,7 +71,7 @@ export function digestMessage(d: Digest, lang: "hi" | "en") {
     parts.push(`${t.overdueTitle(d.overdueOrders)}: ${listWithMore(d.overdue.map((p) => `${p.partyName} (${t.days(p.oldestDays)})`), t.more)}`);
   }
   if (d.unmatchedDispatches) parts.push(t.unmatched(d.unmatchedDispatches));
-  return { title: t.morningTitle, body: parts.join("\n"), url: d.overdueOrders ? "/pending" : "/dispatches", tag: "digest" };
+  return { title: t.morningTitle, body: parts.join("\n"), url: d.overdueOrders ? "/pending" : "/unmatched", tag: "digest" };
 }
 
 /** The 9 AM run: one digest per company, to its owners. */

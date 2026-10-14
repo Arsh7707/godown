@@ -13,6 +13,8 @@ export interface MenuInfo {
   stockKeeper: boolean;
   /** Items low or below zero, shown as a badge on Stock. */
   lowCount: number;
+  /** Dispatch lines no order covers (not marked OK), shown as a badge. */
+  unmatchedCount: number;
   /** Every firm this person is in (current one included). */
   firms: { companyId: string; name: string; current: boolean }[];
 }
@@ -89,6 +91,8 @@ export function SideMenu({
         { href: "/dispatches", icon: "🚛", label: t.d.title },
         { href: "/stock", icon: "📦", label: t.s.title, badge: info.lowCount },
         { href: "/history", icon: "📅", label: t.h.title },
+        { href: "/unmatched", icon: "❓", label: t.u.menu, badge: info.unmatchedCount },
+        { href: "/reports", icon: "📈", label: t.r.menu, show: info.role !== "staff" },
       ],
     },
     {
@@ -99,6 +103,7 @@ export function SideMenu({
         { href: "/manage/team", icon: "🧑‍🤝‍🧑", label: t.m.team },
         { href: "/manage/company", icon: "🏢", label: t.m.company },
         { href: "/manage/import", icon: "📊", label: t.imp.menu },
+        { href: "/activity", icon: "🕘", label: t.a.menu },
       ].map((l) => ({ ...l, show: info.role === "owner" })),
     },
     {

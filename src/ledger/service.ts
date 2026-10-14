@@ -745,28 +745,51 @@ export async function linkUnmatched(
   ctx: Ctx,
   input: { dispatchLineId: string; orderLineId: string; quantity: string | number },
 ) {
+  return (await linkMany(db, ctx, [input]))[0];
+}
+
+/**
+ * Several hand links in one go (all or nothing). Each link is checked
+ * against what the earlier ones in the same call already used, so two links
+ * can never together take more than a dispatch line sent or an order line
+ * still owes.
+ */
+export async function linkMany(db: Db, ctx: Ctx, input: { dispatchLineId: string; orderLineId: string; quantity: string | number }[]) {
   authorize(ctx, "correct");
-  const qty = toPositiveCenti(input.quantity);
+  if (!input.length) throw new LedgerError("NO_LINES", "Nothing to link");
+  const wanted = input.map((l) => ({ ...l, qty: toPositiveCenti(l.quantity) }));
   return db.transaction(async (tx) => {
     await lockFirm(tx, ctx);
     const state = await loadState(tx, ctx.companyId);
-    const d = state.dispatchLines.find((x) => x.dispatchLineId === input.dispatchLineId);
-    const o = state.lines.find((x) => x.orderLineId === input.orderLineId);
-    if (!d) throw new LedgerError("NOT_FOUND", "Dispatch line not found or not current");
-    if (!o) throw new LedgerError("NOT_FOUND", "Order line not found or not current");
-    if (d.partyId !== o.partyId || d.itemId !== o.itemId || (d.unit ?? null) !== (o.unit ?? null)) {
-      throw new LedgerError("LINK_MISMATCH", "Party and item must match");
+    const dLeft = new Map(state.dispatchLines.map((d) => [d.dispatchLineId, unmatched(d)]));
+    const oLeft = new Map(state.lines.map((o) => [o.orderLineId, balance(o)]));
+    const links: PlannedLink[] = [];
+    for (const w of wanted) {
+      const d = state.dispatchLines.find((x) => x.dispatchLineId === w.dispatchLineId);
+      const o = state.lines.find((x) => x.orderLineId === w.orderLineId);
+      if (!d) throw new LedgerError("NOT_FOUND", "Dispatch line not found or not current");
+      if (!o) throw new LedgerError("NOT_FOUND", "Order line not found or not current");
+      if (d.partyId !== o.partyId || d.itemId !== o.itemId || (d.unit ?? null) !== (o.unit ?? null)) {
+        throw new LedgerError("LINK_MISMATCH", "Party and item must match");
+      }
+      const du = dLeft.get(d.dispatchLineId)!;
+      const ob = oLeft.get(o.orderLineId)!;
+      if (w.qty > du || w.qty > ob) {
+        throw new LedgerError("LINK_EXCEEDS", "More than the unmatched quantity or the order balance", {
+          unmatched: centiToDecimal(du),
+          balance: centiToDecimal(ob),
+        });
+      }
+      dLeft.set(d.dispatchLineId, du - w.qty);
+      oLeft.set(o.orderLineId, ob - w.qty);
+      links.push({ dispatchLineId: d.dispatchLineId, orderLineId: o.orderLineId, quantity: w.qty });
     }
-    if (qty > unmatched(d) || qty > balance(o)) {
-      throw new LedgerError("LINK_EXCEEDS", "More than the unmatched quantity or the order balance", {
-        unmatched: centiToDecimal(unmatched(d)),
-        balance: centiToDecimal(balance(o)),
-      });
+    await insertLinks(tx, ctx, links);
+    for (const l of links) {
+      const d = state.dispatchLines.find((x) => x.dispatchLineId === l.dispatchLineId)!;
+      await audit(tx, ctx, "dispatch.link", "dispatch", d.dispatchId, linkForAudit(l));
     }
-    const link = { dispatchLineId: d.dispatchLineId, orderLineId: o.orderLineId, quantity: qty };
-    await insertLinks(tx, ctx, [link]);
-    await audit(tx, ctx, "dispatch.link", "dispatch", d.dispatchId, linkForAudit(link));
-    return link;
+    return links;
   });
 }
 

@@ -39,7 +39,8 @@ export type LedgerErrorCode =
   | "FIRM_HAS_ENTRIES"
   | "IMPORT_TOO_BIG"
   | "IMPORT_EMPTY"
-  | "IMPORT_STALE";
+  | "IMPORT_STALE"
+  | "RANGE_TOO_LONG";
 
 /** Expected, user-facing rule violations. `details` carries numbers for the UI to localise. */
 export class LedgerError extends Error {
