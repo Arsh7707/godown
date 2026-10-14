@@ -10,9 +10,23 @@
  *   waits in the Inbox for the user to confirm; nothing is saved unreviewed.
  */
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { NetworkError, postJson, upload } from "./api";
+import { currentFirm, NetworkError, postJson, upload } from "./api";
 
-export type OutboxItem =
+/** Name of the firm this screen belongs to (set by the root layout). */
+export function currentFirmName(): string | null {
+  if (typeof document === "undefined") return null;
+  return document.querySelector('meta[name="godown-firm-name"]')?.getAttribute("content") || null;
+}
+
+/** Every item remembers the firm it was made in and is only sent while the app is in that firm. */
+interface FirmStamp {
+  /** Company id; missing on items saved before firms existed (sent as-is). */
+  firm?: string | null;
+  firmName?: string | null;
+}
+
+export type OutboxItem = FirmStamp &
+  (
   | {
       id: string;
       type: "save";
@@ -41,7 +55,8 @@ export type OutboxItem =
       state: "queued" | "read" | "failed";
       error?: string;
       createdAt: number;
-    };
+    }
+  );
 
 const DB = "order-book";
 const STORE = "outbox";
@@ -77,7 +92,8 @@ type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : n
 export type NewOutboxItem = DistributiveOmit<OutboxItem, "createdAt"> & { createdAt?: number };
 
 export async function put(item: NewOutboxItem) {
-  await tx("readwrite", (s) => s.put({ ...item, createdAt: item.createdAt ?? Date.now() }));
+  const stamp = item.firm !== undefined ? {} : { firm: currentFirm(), firmName: currentFirmName() };
+  await tx("readwrite", (s) => s.put({ ...item, ...stamp, createdAt: item.createdAt ?? Date.now() }));
   await refresh();
   void sync();
 }
@@ -112,17 +128,22 @@ export async function sync(): Promise<void> {
   running = true;
   try {
     await refresh();
+    const here = currentFirm();
     for (const item of snapshot) {
       if (item.state !== "queued") continue;
+      // Made in another firm: wait until the app is in that firm again.
+      if (item.firm && here && item.firm !== here) continue;
+      const firm = item.firm ?? null;
       try {
         if (item.type === "save") {
           const url = item.kind === "order" ? "/api/orders" : item.kind === "dispatch" ? "/api/dispatches" : "/api/stock";
-          const r = await postJson<{ share: { text: string; url: string } }>(url, item.body);
+          const r = await postJson<{ share: { text: string; url: string } }>(url, item.body, { firm });
+          if (!r.ok && r.code === "FIRM_CHANGED") continue;
           await tx("readwrite", (s) => s.put(r.ok ? { ...item, state: "done", share: r.share } : { ...item, state: "failed", error: r.code }));
         } else {
           let attachmentId = item.attachmentId;
           if (item.blob && item.blobKind && !attachmentId) {
-            attachmentId = await upload(item.captureId, item.blobKind, item.blob);
+            attachmentId = await upload(item.captureId, item.blobKind, item.blob, firm);
             await tx("readwrite", (s) => s.put({ ...item, attachmentId }));
           }
           const r = await postJson("/api/extract", {
@@ -134,12 +155,14 @@ export async function sync(): Promise<void> {
             audioAttachmentId: item.blobKind === "voice_note" ? attachmentId : undefined,
             audioSeconds: item.audioSeconds,
             defaultDate: item.defaultDate,
-          });
+          }, { firm });
+          if (!r.ok && r.code === "FIRM_CHANGED") continue;
           // The stored reading is fetched again (free, idempotent) when the user opens it from the Inbox.
           await tx("readwrite", (s) => s.put(r.ok ? { ...item, attachmentId, blob: undefined, state: "read" } : { ...item, attachmentId, state: "failed", error: r.code }));
         }
       } catch (e) {
         if (e instanceof NetworkError) break;
+        if (e instanceof Error && e.message === "FIRM_CHANGED") continue;
         await tx("readwrite", (s) => s.put({ ...item, state: "failed", error: e instanceof Error ? e.message : "UNKNOWN" }));
       }
       await refresh();

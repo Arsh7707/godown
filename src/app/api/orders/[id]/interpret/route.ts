@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/orders/[
     if (await overDailyLimit(user.companyId)) return fail("AI_LIMIT", 429);
 
     const signal = AbortSignal.timeout(Number(process.env.EXTRACTION_TIMEOUT_MS ?? 45_000));
-    const catalog = await loadCatalog(db, user.companyId);
+    const catalog = await loadCatalog(db, user.companyId, user.stockId);
     const usage: Promise<unknown>[] = [];
     try {
       let instruction = b.text?.trim() ?? "";

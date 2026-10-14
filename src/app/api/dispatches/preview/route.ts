@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     if (!b.partyId || !b.dispatchDate || !b.lines?.length) return fail("INCOMPLETE");
     const plan = await previewDispatch(db, ctxFor(user), { partyId: b.partyId, dispatchDate: b.dispatchDate, lines: b.lines }, { excludeDispatchId: b.excludeDispatchId });
     // In-stock count per item, so the form can warn before sending more than is there.
-    const levels = await stockLevels(db, user.companyId, [...new Set(b.lines.map((l) => l.itemId))]);
+    const levels = await stockLevels(db, user.stockId, [...new Set(b.lines.map((l) => l.itemId))]);
     // Keyed "itemId|unit" (unit empty for the item's own unit).
     const stock: Record<string, number> = Object.fromEntries([...levels].map(([k, v]) => [k, v.inStock]));
     if (b.excludeDispatchId) {

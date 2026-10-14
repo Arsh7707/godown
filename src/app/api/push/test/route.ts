@@ -9,7 +9,7 @@ export async function POST() {
     const send = await webPushSender();
     if (!send) return fail("PUSH_NOT_CONFIGURED", 503);
     const t = messages(user.language).n;
-    const sent = await notifyUsers(db, send, user.companyId, [user.userId], () => ({ title: t.testTitle, body: t.testBody, url: "/", tag: "test" }));
+    const sent = await notifyUsers(db, send, [user.userId], () => ({ title: t.testTitle, body: t.testBody, url: "/", tag: "test" }));
     return json({ ok: sent > 0, sent });
   });
 }

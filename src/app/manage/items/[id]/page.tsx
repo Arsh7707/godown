@@ -13,7 +13,7 @@ export default async function ItemPage({ params }: PageProps<"/manage/items/[id]
   const all = await itemsForManage(db, ctxFor(user));
   const it = all.find((x) => x.id === id);
   if (!it) notFound();
-  const used = await itemUsed(db, user.companyId, id);
+  const used = await itemUsed(db, user.stockId, id);
   const siblings = all.filter((x) => x.product === it.product).length;
   return (
     <>

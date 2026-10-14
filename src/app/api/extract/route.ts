@@ -56,7 +56,7 @@ export async function POST(req: Request) {
         durationMs: 0,
       };
     } else {
-      const catalog = await loadCatalog(db, user.companyId);
+      const catalog = await loadCatalog(db, user.companyId, user.stockId);
       const usage: Promise<unknown>[] = [];
       const deps = defaultDeps({ onUsage: (u, model) => usage.push(recordClaudeUsage(user.companyId, user.userId, b.captureId!, u, model)) });
       const [image, audio] = await Promise.all([att(b.imageAttachmentId), att(b.audioAttachmentId)]);

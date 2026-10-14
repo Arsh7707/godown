@@ -116,6 +116,8 @@ export interface SessionUser {
   language: "hi" | "en";
   /** Gets the daily "maal add kiya?" reminder. */
   stockKeeper: boolean;
+  /** Firm whose items and stock this firm uses: its own id unless it shares another firm's godown. */
+  stockId: string;
 }
 
 export async function userForToken(db: Db, token: string, now = new Date()): Promise<SessionUser | null> {
@@ -128,6 +130,7 @@ export async function userForToken(db: Db, token: string, now = new Date()): Pro
       userId: users.id,
       companyId: users.companyId,
       companyName: companies.name,
+      stockCompanyId: companies.stockCompanyId,
       name: users.name,
       phone: users.phone,
       role: users.role,
@@ -154,6 +157,7 @@ export async function userForToken(db: Db, token: string, now = new Date()): Pro
     role: row.role,
     language: row.language,
     stockKeeper: row.stockKeeper,
+    stockId: row.stockCompanyId ?? row.companyId,
   };
 }
 

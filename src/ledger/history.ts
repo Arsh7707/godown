@@ -7,7 +7,8 @@ import type { Db } from "@/db/types";
 import { dispatchLines, dispatches, items, orderLineVersions, orders, parties, stockMovements, users } from "@/db/schema";
 import { formatQty, toCenti } from "@/lib/qty";
 import { unitLabel } from "@/lib/units";
-import { canChange, type Ctx } from "./service";
+import { canChange, stockOf, type Ctx } from "./service";
+import { poolFirms } from "@/stock/service";
 import { currentDispatchRevisions, currentOrderRevisions } from "./state";
 
 export interface DayEntry {
@@ -32,10 +33,11 @@ export async function dayEntries(db: Db, ctx: Ctx, date: string): Promise<DayEnt
   const [oRevs, dRevs, moves, ps, its, us] = await Promise.all([
     currentOrderRevisions(db, ctx.companyId).then((r) => r.filter((x) => x.orderDate === date)),
     currentDispatchRevisions(db, ctx.companyId).then((r) => r.filter((x) => x.dispatchDate === date)),
-    db.select().from(stockMovements).where(and(eq(stockMovements.companyId, ctx.companyId), eq(stockMovements.entryDate, date))),
+    db.select().from(stockMovements).where(and(eq(stockMovements.companyId, stockOf(ctx)), eq(stockMovements.entryDate, date))),
     db.select({ id: parties.id, name: parties.name }).from(parties).where(eq(parties.companyId, ctx.companyId)),
-    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, ctx.companyId)),
-    db.select({ id: users.id, name: users.name }).from(users).where(eq(users.companyId, ctx.companyId)),
+    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, stockOf(ctx))),
+    // Goods in of a shared godown can be entered from any of its firms.
+    poolFirms(db, stockOf(ctx)).then((fs) => db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.companyId, fs.map((f) => f.id)))),
   ]);
   const party = new Map(ps.map((p) => [p.id, p.name]));
   const item = new Map(its.map((i) => [i.id, i]));
@@ -90,7 +92,7 @@ export async function dayEntries(db: Db, ctx: Ctx, date: string): Promise<DayEnt
   const ids = moves.map((m) => m.id);
   const undoneIds = new Set(
     ids.length
-      ? (await db.select({ id: stockMovements.reversesId }).from(stockMovements).where(and(eq(stockMovements.companyId, ctx.companyId), inArray(stockMovements.reversesId, ids)))).map((r) => r.id)
+      ? (await db.select({ id: stockMovements.reversesId }).from(stockMovements).where(and(eq(stockMovements.companyId, stockOf(ctx)), inArray(stockMovements.reversesId, ids)))).map((r) => r.id)
       : [],
   );
   const batches = new Map<string, typeof moves>();

@@ -15,7 +15,7 @@ import { loadCatalog } from "@/extraction/catalog";
 import { matchMention, type CatalogEntry } from "@/extraction/matcher";
 import { normalizeName } from "@/lib/normalize";
 import { displayScript } from "@/lib/script";
-import type { Ctx } from "@/ledger/service";
+import { stockOf, type Ctx } from "@/ledger/service";
 
 export interface Pick {
   kind: "party" | "item";
@@ -30,7 +30,7 @@ const MAX_PICKS = 30;
 
 export async function learnAliases(db: Db, ctx: Ctx, picks: Pick[]): Promise<Pick[]> {
   if (ctx.role === "viewer" || !picks.length) return [];
-  const catalog = await loadCatalog(db, ctx.companyId);
+  const catalog = await loadCatalog(db, ctx.companyId, stockOf(ctx));
   const learned: Pick[] = [];
   const seen = new Set<string>();
   for (const p of picks.slice(0, MAX_PICKS)) {
@@ -52,7 +52,7 @@ export async function learnAliases(db: Db, ctx: Ctx, picks: Pick[]): Promise<Pic
     const inserted =
       p.kind === "party"
         ? await db.insert(partyAliases).values({ ...row, partyId: p.id }).onConflictDoNothing().returning({ id: partyAliases.id })
-        : await db.insert(itemAliases).values({ ...row, itemId: p.id }).onConflictDoNothing().returning({ id: itemAliases.id });
+        : await db.insert(itemAliases).values({ ...row, companyId: stockOf(ctx), itemId: p.id }).onConflictDoNothing().returning({ id: itemAliases.id });
     if (!inserted.length) continue;
     await db.insert(auditLog).values({ companyId: ctx.companyId, userId: ctx.userId, action: `${p.kind}.alias.learn`, entityType: p.kind, entityId: p.id, details: { alias } });
     learned.push({ ...p, mention: alias });

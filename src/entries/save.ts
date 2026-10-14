@@ -72,7 +72,7 @@ export async function buildShare(user: SessionUser, kind: "order" | "dispatch", 
   const itemIds = [...new Set(entryLines.map((l) => l.itemId))];
   const [[party], its, pending] = await Promise.all([
     db.select({ name: parties.name }).from(parties).where(and(eq(parties.id, partyId), eq(parties.companyId, user.companyId))),
-    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(and(eq(items.companyId, user.companyId), inArray(items.id, itemIds))),
+    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(and(eq(items.companyId, user.stockId), inArray(items.id, itemIds))),
     getPending(db, ctx, { partyId }),
   ]);
   const itemById = new Map(its.map((i) => [i.id, i]));

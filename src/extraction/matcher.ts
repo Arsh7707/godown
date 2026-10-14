@@ -68,15 +68,28 @@ const SHORT_FORMS: Record<string, string> = {
   intl: "international", txt: "textiles", tex: "textiles", "&": "and", n: "and",
 };
 
-function stripHonorifics(s: string): string {
+/** Same names are compared again and again (every mention × every catalog name): remember the work. */
+function memo(fn: (s: string) => string): (s: string) => string {
+  const cache = new Map<string, string>();
+  return (s) => {
+    let v = cache.get(s);
+    if (v === undefined) {
+      if (cache.size > 50_000) cache.clear();
+      cache.set(s, (v = fn(s)));
+    }
+    return v;
+  };
+}
+
+const stripHonorifics = memo((s: string): string =>
   // Compare across scripts: a Gurmukhi alias matches the same name in Hindi letters.
-  return normalizeName(displayScript(s).replace(/&/g, " and "))
+  normalizeName(displayScript(s).replace(/&/g, " and "))
     .replace(/^m s /, "")
     .split(" ")
     .filter((w) => !HONORIFICS.has(w))
     .map((w) => COLOURS[w] ?? SHORT_FORMS[w] ?? w)
-    .join(" ");
-}
+    .join(" "),
+);
 const compact = (s: string) => stripHonorifics(s).replace(/\s+/g, "");
 const wordSet = (s: string) => stripHonorifics(s).split(" ").filter(Boolean).sort().join(" ");
 const digits = (s: string) => s.replace(/\D+/g, "");
@@ -111,8 +124,8 @@ export function jaroWinkler(a: string, b: string): number {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
-const sound = (s: string) => phoneticKey(stripHonorifics(s));
-const outline = (s: string) => skeletonKey(stripHonorifics(s));
+const sound = memo((s: string) => phoneticKey(stripHonorifics(s)));
+const outline = memo((s: string) => skeletonKey(stripHonorifics(s)));
 const squash = (s: string) => s.replace(/\s+/g, "");
 
 /** Similarity of one mention form to one catalog key. */

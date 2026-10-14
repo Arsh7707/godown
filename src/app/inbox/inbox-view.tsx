@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { messages, type Lang } from "@/i18n/messages";
 import { remove, useAutoSync, useOutbox, type OutboxItem } from "@/client/outbox";
+import { currentFirm } from "@/client/api";
+import { switchFirm } from "@/client/firm";
 
 /** Entries kept on this phone: captures to review, entries waiting to send, and ones the server refused. */
 export function InboxView({ lang }: { lang: Lang }) {
@@ -19,6 +21,9 @@ export function InboxView({ lang }: { lang: Lang }) {
     const link = (param: string) => `${base}${base.includes("?") ? "&" : "?"}${param}=${i.id}`;
     let action: React.ReactNode = null;
     let status = "";
+    const here = currentFirm();
+    // Made while the app was in another firm: it is sent / reviewed there, never here.
+    const elsewhere = !!i.firm && !!here && i.firm !== here;
     if (i.state === "queued") status = t.inbox.sending;
     if (i.type === "capture" && i.state === "read")
       action = (
@@ -36,10 +41,21 @@ export function InboxView({ lang }: { lang: Lang }) {
         ) : null;
     }
     if (i.type === "save" && i.state === "done") status = `✓ ${t.inbox.sent}`;
+    if (elsewhere && i.state !== "done") {
+      status = `🏢 ${i.firmName ?? "?"}: ${t.f.otherFirmEntry}`;
+      action = (
+        <button onClick={() => switchFirm(i.firm!, "/inbox")} className="rounded-xl bg-[#1f4e79] px-4 py-2.5 font-semibold text-white">
+          {t.f.switchTo}
+        </button>
+      );
+    }
     return (
       <div key={i.id} className="space-y-2 rounded-2xl bg-white p-4 shadow-sm">
         <div className="flex justify-between text-xs uppercase tracking-wide text-stone-400">
-          <span>{kindLabel(i.kind)}</span>
+          <span>
+            {kindLabel(i.kind)}
+            {elsewhere && ` · 🏢 ${i.firmName ?? ""}`}
+          </span>
           <span>{when(i.createdAt)}</span>
         </div>
         <p className="text-lg">{what(i)}</p>

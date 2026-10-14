@@ -23,6 +23,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["owner", "staff", "viewer"]);
@@ -54,6 +55,12 @@ export const companies = pgTable("companies", {
   city: text("city"),
   /** Indian state / UT name (see lib/india.ts). */
   state: text("state"),
+  /**
+   * Shared godown: this firm uses the items and stock of that firm instead of
+   * its own. Null = own items and stock. Always points at a firm that has
+   * its own stock (no chains).
+   */
+  stockCompanyId: uuid("stock_company_id").references((): AnyPgColumn => companies.id),
   createdAt: createdAt(),
 });
 

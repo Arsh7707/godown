@@ -36,5 +36,5 @@ export async function requireUser(): Promise<SessionUser> {
 }
 
 export function ctxFor(user: SessionUser): Ctx {
-  return { companyId: user.companyId, userId: user.userId, role: user.role };
+  return { companyId: user.companyId, userId: user.userId, role: user.role, stockId: user.stockId };
 }

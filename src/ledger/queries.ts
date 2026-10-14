@@ -11,7 +11,7 @@ import { LedgerError } from "@/lib/errors";
 import { unitKey, unitLabel } from "@/lib/units";
 import { balance, cancelledQty, daysOld, isOverdue } from "./domain";
 import { currentDispatchRevisions, currentOrderRevisions, loadState } from "./state";
-import { canChange, type Ctx } from "./service";
+import { canChange, stockOf, type Ctx } from "./service";
 
 export interface PendingItemRow {
   itemId: string;
@@ -44,7 +44,7 @@ export async function pendingOverview(db: Db, ctx: Ctx, opts: { includeSettled?:
   const { lines } = await loadState(db, ctx.companyId);
   const [ps, its] = await Promise.all([
     db.select({ id: parties.id, name: parties.name }).from(parties).where(eq(parties.companyId, ctx.companyId)),
-    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, ctx.companyId)),
+    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, stockOf(ctx))),
   ]);
   const partyName = new Map(ps.map((p) => [p.id, p.name]));
   const item = new Map(its.map((i) => [i.id, i]));
@@ -95,7 +95,7 @@ export async function partyOrders(db: Db, ctx: Ctx, partyId: string) {
   const [party] = await db.select().from(parties).where(and(eq(parties.id, partyId), eq(parties.companyId, ctx.companyId)));
   if (!party) throw new LedgerError("NOT_FOUND", "Party not found");
   const { lines } = await loadState(db, ctx.companyId, { partyId });
-  const its = await db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, ctx.companyId));
+  const its = await db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, stockOf(ctx)));
   const item = new Map(its.map((i) => [i.id, i]));
   const ordersById = new Map<string, { orderId: string; orderDate: string; promisedDate: string | null; status: string; daysOld: number; overdue: boolean; lines: (PendingItemRow & { cancelled: number })[] }>();
   for (const l of lines) {
@@ -162,7 +162,7 @@ export async function orderDetail(db: Db, ctx: Ctx, orderId: string) {
   const [{ lines }, [party], its, us] = await Promise.all([
     loadState(db, ctx.companyId, { orderId }),
     db.select({ id: parties.id, name: parties.name }).from(parties).where(eq(parties.id, cur.partyId)),
-    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, ctx.companyId)),
+    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, stockOf(ctx))),
     db.select({ id: users.id, name: users.name }).from(users).where(eq(users.companyId, ctx.companyId)),
   ]);
   const item = new Map(its.map((i) => [i.id, i]));
@@ -286,7 +286,7 @@ export async function dispatchList(
     db.select().from(dispatchLines).where(inArray(dispatchLines.dispatchRevisionId, revIds)),
     db.select().from(dispatches).where(inArray(dispatches.id, revs.map((r) => r.dispatchId))),
     db.select({ id: parties.id, name: parties.name }).from(parties).where(eq(parties.companyId, ctx.companyId)),
-    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, ctx.companyId)),
+    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, stockOf(ctx))),
     db.select({ id: users.id, name: users.name }).from(users).where(eq(users.companyId, ctx.companyId)),
   ]);
   const allocs = lines.length

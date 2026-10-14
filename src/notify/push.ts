@@ -3,9 +3,9 @@
  * without them every send is a no-op, so the app works the same with
  * reminders switched off.
  */
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db/types";
-import { pushSubscriptions, users } from "@/db/schema";
+import { companies, pushSubscriptions, users } from "@/db/schema";
 
 export interface PushMessage {
   title: string;
@@ -64,30 +64,72 @@ export async function ownerIds(db: Db, companyId: string, except?: string): Prom
   return rows.map((r) => r.id);
 }
 
-/** Sends a message (built per user, so each gets their own language) to every phone those users subscribed. */
+/** Link that opens `url` inside firm `companyId`, switching to it first if needed. */
+export const firmUrl = (companyId: string, url: string) => `/firm/switch?to=${companyId}&next=${encodeURIComponent(url)}`;
+
+/**
+ * Sends a message (built per user, so each gets their own language) to every
+ * phone those users subscribed.
+ *
+ * One person can be in several firms (one user row per firm, same phone),
+ * but a phone subscribes once, under whichever firm it was in. So the message
+ * goes to the person: every subscription of any of their user rows. When they
+ * have more than one firm, the title starts with the firm's name and tapping
+ * it opens that firm. Each person gets a message once, even if listed twice.
+ */
 export async function notifyUsers(
   db: Db,
   send: PushSender,
-  companyId: string,
   userIds: string[],
   build: (user: { id: string; language: "hi" | "en" }) => PushMessage | null,
 ): Promise<number> {
   if (!userIds.length) return 0;
+  const recipients = await db
+    .select({ id: users.id, phone: users.phone, language: users.language, companyId: users.companyId, firmName: companies.name })
+    .from(users)
+    .innerJoin(companies, eq(companies.id, users.companyId))
+    .where(and(inArray(users.id, [...new Set(userIds)]), eq(users.active, true)));
+  // In the order given: the first row for a phone decides the firm and language.
+  const order = new Map<string, number>();
+  userIds.forEach((id, i) => order.has(id) || order.set(id, i));
+  recipients.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+  const byPhone = new Map<string, (typeof recipients)[number]>();
+  for (const r of recipients) if (!byPhone.has(r.phone)) byPhone.set(r.phone, r);
+  if (!byPhone.size) return 0;
+
+  const rows = await db
+    .select({ id: users.id, phone: users.phone })
+    .from(users)
+    .where(and(inArray(users.phone, [...byPhone.keys()]), eq(users.active, true)));
+  const phoneOf = new Map(rows.map((r) => [r.id, r.phone]));
+  const firmCount = new Map<string, number>();
+  for (const r of rows) firmCount.set(r.phone, (firmCount.get(r.phone) ?? 0) + 1);
+
   const subs = await db
-    .select({ id: pushSubscriptions.id, userId: pushSubscriptions.userId, endpoint: pushSubscriptions.endpoint, p256dh: pushSubscriptions.p256dh, auth: pushSubscriptions.auth, language: users.language })
+    .select({ id: pushSubscriptions.id, userId: pushSubscriptions.userId, endpoint: pushSubscriptions.endpoint, p256dh: pushSubscriptions.p256dh, auth: pushSubscriptions.auth })
     .from(pushSubscriptions)
-    .innerJoin(users, eq(users.id, pushSubscriptions.userId))
-    .where(and(eq(pushSubscriptions.companyId, companyId), inArray(pushSubscriptions.userId, userIds), eq(users.active, true)));
+    .where(inArray(pushSubscriptions.userId, rows.map((r) => r.id)));
   let sent = 0;
   const gone: string[] = [];
   const ok: string[] = [];
+  const built = new Map<string, PushMessage | null>();
   await Promise.all(
     subs.map(async (s) => {
-      const msg = build({ id: s.userId, language: s.language });
+      const phone = phoneOf.get(s.userId)!;
+      const r = byPhone.get(phone)!;
+      if (!built.has(phone)) {
+        const msg = build({ id: r.id, language: r.language });
+        const several = (firmCount.get(phone) ?? 0) > 1;
+        built.set(
+          phone,
+          msg && several ? { ...msg, title: `${r.firmName} · ${msg.title}`, url: firmUrl(r.companyId, msg.url), tag: msg.tag && `${msg.tag}-${r.companyId}` } : msg,
+        );
+      }
+      const msg = built.get(phone);
       if (!msg) return;
-      const r = await send(s, msg);
-      if (r === "gone") gone.push(s.id);
-      if (r === "ok") {
+      const res = await send(s, msg);
+      if (res === "gone") gone.push(s.id);
+      if (res === "ok") {
         ok.push(s.id);
         sent++;
       }
@@ -96,6 +138,26 @@ export async function notifyUsers(
   if (gone.length) await db.delete(pushSubscriptions).where(inArray(pushSubscriptions.id, gone));
   if (ok.length) await db.update(pushSubscriptions).set({ lastSentAt: new Date() }).where(inArray(pushSubscriptions.id, ok));
   return sent;
+}
+
+/**
+ * Owners of every firm sharing a godown (stock firm first), for stock alerts.
+ * `exceptPhone` leaves out the person who caused the alert, in all their firms.
+ */
+export async function poolOwnerIds(db: Db, stockId: string, exceptPhone?: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: users.id, companyId: users.companyId })
+    .from(users)
+    .innerJoin(companies, eq(companies.id, users.companyId))
+    .where(
+      and(
+        sql`(${companies.id} = ${stockId} or ${companies.stockCompanyId} = ${stockId})`,
+        eq(users.role, "owner"),
+        eq(users.active, true),
+        exceptPhone ? ne(users.phone, exceptPhone) : undefined,
+      ),
+    );
+  return rows.sort((a, b) => Number(b.companyId === stockId) - Number(a.companyId === stockId)).map((r) => r.id);
 }
 
 /** Saves (or moves to this user) a phone's subscription. */

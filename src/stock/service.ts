@@ -12,13 +12,13 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/types";
-import { dispatches, items, parties, stockMovements, users } from "@/db/schema";
+import { companies, dispatches, items, parties, stockMovements, users } from "@/db/schema";
 import { assertEntryDate, todayIST } from "@/lib/dates";
 import { LedgerError } from "@/lib/errors";
 import { centiToDecimal, toCenti, toPositiveCenti } from "@/lib/qty";
 import { balance } from "@/ledger/domain";
-import { loadState } from "@/ledger/state";
-import { assertItems, audit, canChange, lockCompany, resolveUnits, type Channel, type Ctx, type InputMethod } from "@/ledger/service";
+import { loadState, type LedgerState } from "@/ledger/state";
+import { assertItems, audit, canChange, lockFirm, resolveUnits, stockOf, type Channel, type Ctx, type InputMethod } from "@/ledger/service";
 import { unitKey, unitLabel } from "@/lib/units";
 
 export type StockEntryKind = "receipt" | "count" | "adjustment";
@@ -59,15 +59,33 @@ function parseCount(q: string | number): number {
   return s === "0" || s === "0.0" || s === "0.00" ? 0 : toPositiveCenti(s);
 }
 
-/** Current stock per item and unit, keyed by unitKey(itemId, unit). */
-export async function stockLevels(db: Db, companyId: string, itemIds?: string[]): Promise<Map<string, StockLevel>> {
+/** Firms that share one godown: the stock firm itself plus every firm that uses its stock. Stock firm first. */
+export async function poolFirms(db: Db, stockId: string): Promise<{ id: string; name: string }[]> {
+  const rows = await db
+    .select({ id: companies.id, name: companies.name, stockCompanyId: companies.stockCompanyId })
+    .from(companies)
+    .where(sql`${companies.id} = ${stockId} or ${companies.stockCompanyId} = ${stockId}`);
+  return rows.sort((a, b) => (a.id === stockId ? -1 : b.id === stockId ? 1 : a.name.localeCompare(b.name))).map(({ id, name }) => ({ id, name }));
+}
+
+/** Orders and dispatches of every firm that shares the godown: they all take from the same stock. */
+export async function loadPoolState(db: Db, stockId: string): Promise<LedgerState & { firmOf: Map<string, string> }> {
+  const firms = await poolFirms(db, stockId);
+  const states = await Promise.all(firms.map((f) => loadState(db, f.id)));
+  const firmOf = new Map<string, string>();
+  states.forEach((st, i) => st.dispatchLines.forEach((d) => firmOf.set(d.dispatchId, firms[i].id)));
+  return { lines: states.flatMap((st) => st.lines), dispatchLines: states.flatMap((st) => st.dispatchLines), firmOf };
+}
+
+/** Current stock per item and unit, keyed by unitKey(itemId, unit). `stockId` is the firm that holds the stock. */
+export async function stockLevels(db: Db, stockId: string, itemIds?: string[]): Promise<Map<string, StockLevel>> {
   const [moves, state] = await Promise.all([
     db
       .select({ itemId: stockMovements.itemId, unit: stockMovements.unit, total: sql<string>`sum(${stockMovements.quantity})` })
       .from(stockMovements)
-      .where(and(eq(stockMovements.companyId, companyId), itemIds?.length ? inArray(stockMovements.itemId, itemIds) : undefined))
+      .where(and(eq(stockMovements.companyId, stockId), itemIds?.length ? inArray(stockMovements.itemId, itemIds) : undefined))
       .groupBy(stockMovements.itemId, stockMovements.unit),
-    loadState(db, companyId),
+    loadPoolState(db, stockId),
   ]);
   const out = new Map<string, StockLevel>();
   const get = (itemId: string, unit: string | null) => {
@@ -92,18 +110,19 @@ export async function recordStock(db: Db, ctx: Ctx, input: StockEntryInput) {
     q: input.kind === "receipt" ? toPositiveCenti(l.quantity) : input.kind === "count" ? parseCount(l.quantity) : parseSigned(l.quantity),
   }));
 
+  const stockId = stockOf(ctx);
   return db.transaction(async (tx) => {
-    await lockCompany(tx, ctx.companyId);
+    await lockFirm(tx, ctx);
     const firstId = `${input.captureId}-0`;
     const [dup] = await tx
       .select({ batchId: stockMovements.batchId })
       .from(stockMovements)
-      .where(and(eq(stockMovements.companyId, ctx.companyId), eq(stockMovements.captureId, firstId)));
+      .where(and(eq(stockMovements.companyId, stockId), eq(stockMovements.captureId, firstId)));
     if (dup) return { batchId: dup.batchId, duplicate: true, lines: [] as { itemId: string; unit: string | null; change: number; before: number; after: number }[] };
 
-    await assertItems(tx, ctx.companyId, raw.map((p) => p.itemId));
-    const parsed = await resolveUnits(tx, ctx.companyId, raw);
-    const levels = await stockLevels(tx, ctx.companyId, [...new Set(parsed.map((p) => p.itemId))]);
+    await assertItems(tx, stockId, raw.map((p) => p.itemId));
+    const parsed = await resolveUnits(tx, stockId, raw);
+    const levels = await stockLevels(tx, stockId, [...new Set(parsed.map((p) => p.itemId))]);
     const running = new Map([...levels].map(([k, v]) => [k, v.inStock]));
     const batchId = randomUUID();
     const lines: { itemId: string; unit: string | null; change: number; before: number; after: number }[] = [];
@@ -115,7 +134,7 @@ export async function recordStock(db: Db, ctx: Ctx, input: StockEntryInput) {
       running.set(k, before + change);
       lines.push({ itemId: p.itemId, unit: p.unit, change, before, after: before + change });
       await tx.insert(stockMovements).values({
-        companyId: ctx.companyId,
+        companyId: stockId,
         batchId,
         captureId: `${input.captureId}-${i}`,
         itemId: p.itemId,
@@ -145,15 +164,16 @@ export async function recordStock(db: Db, ctx: Ctx, input: StockEntryInput) {
 
 /** Undo a stock entry (all its lines) with reversal rows. Owners anytime; staff their own, same day. */
 export async function reverseStockEntry(db: Db, ctx: Ctx, batchId: string, reason?: string | null) {
+  const stockId = stockOf(ctx);
   return db.transaction(async (tx) => {
-    await lockCompany(tx, ctx.companyId);
-    const rows = await tx.select().from(stockMovements).where(and(eq(stockMovements.companyId, ctx.companyId), eq(stockMovements.batchId, batchId)));
+    await lockFirm(tx, ctx);
+    const rows = await tx.select().from(stockMovements).where(and(eq(stockMovements.companyId, stockId), eq(stockMovements.batchId, batchId)));
     if (!rows.length) throw new LedgerError("NOT_FOUND", "Stock entry not found");
     if (rows.some((r) => r.kind === "reversal")) throw new LedgerError("ALREADY_CANCELLED", "This is itself a reversal");
     const already = await tx
       .select({ id: stockMovements.reversesId })
       .from(stockMovements)
-      .where(and(eq(stockMovements.companyId, ctx.companyId), inArray(stockMovements.reversesId, rows.map((r) => r.id))));
+      .where(and(eq(stockMovements.companyId, stockId), inArray(stockMovements.reversesId, rows.map((r) => r.id))));
     if (already.length) throw new LedgerError("ALREADY_CANCELLED", "Already reversed");
     const head = rows[0];
     if (!canChange(ctx, head.createdBy, head.createdAt)) {
@@ -162,7 +182,7 @@ export async function reverseStockEntry(db: Db, ctx: Ctx, batchId: string, reaso
     const revBatch = randomUUID();
     for (const r of rows) {
       await tx.insert(stockMovements).values({
-        companyId: ctx.companyId,
+        companyId: stockId,
         batchId: revBatch,
         captureId: `reverse-${r.id}`,
         itemId: r.itemId,
@@ -205,10 +225,12 @@ export interface StockRow {
  * with nothing yet shows one row in its own unit). Products stay together.
  */
 export async function stockOverview(db: Db, ctx: Ctx): Promise<StockRow[]> {
+  const stockId = stockOf(ctx);
   const [its, levels, state] = await Promise.all([
-    db.select().from(items).where(and(eq(items.companyId, ctx.companyId), eq(items.active, true))),
-    stockLevels(db, ctx.companyId),
-    loadState(db, ctx.companyId),
+    db.select().from(items).where(and(eq(items.companyId, stockId), eq(items.active, true))),
+    stockLevels(db, stockId),
+    // Every firm sharing the godown owes from the same stock.
+    loadPoolState(db, stockId),
   ]);
   const owed = new Map<string, number>();
   for (const l of state.lines) owed.set(unitKey(l.itemId, l.unit), (owed.get(unitKey(l.itemId, l.unit)) ?? 0) + balance(l));
@@ -258,13 +280,15 @@ export interface StockEvent {
 
 /** One item's stock card: numbers plus every movement and dispatch, newest first. */
 export async function itemStockHistory(db: Db, ctx: Ctx, itemId: string) {
-  const [it] = await db.select().from(items).where(and(eq(items.id, itemId), eq(items.companyId, ctx.companyId)));
+  const stockId = stockOf(ctx);
+  const [it] = await db.select().from(items).where(and(eq(items.id, itemId), eq(items.companyId, stockId)));
   if (!it) throw new LedgerError("NOT_FOUND", "Item not found");
+  const firms = await poolFirms(db, stockId);
   const [rows, us, overview, state] = await Promise.all([
-    db.select().from(stockMovements).where(and(eq(stockMovements.companyId, ctx.companyId), eq(stockMovements.itemId, itemId))),
-    db.select({ id: users.id, name: users.name }).from(users).where(eq(users.companyId, ctx.companyId)),
+    db.select().from(stockMovements).where(and(eq(stockMovements.companyId, stockId), eq(stockMovements.itemId, itemId))),
+    db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.companyId, firms.map((f) => f.id))),
     stockOverview(db, ctx),
-    loadState(db, ctx.companyId),
+    loadPoolState(db, stockId),
   ]);
   const userName = new Map(us.map((u) => [u.id, u.name]));
   const reversedIds = new Set(rows.map((r) => r.reversesId).filter(Boolean));
@@ -287,9 +311,22 @@ export async function itemStockHistory(db: Db, ctx: Ctx, itemId: string) {
     const head = new Map(heads.map((h) => [h.id, h]));
     const ps = await db.select({ id: parties.id, name: parties.name }).from(parties).where(eq(parties.companyId, ctx.companyId));
     const partyName = new Map(ps.map((p) => [p.id, p.name]));
+    const firmName = new Map(firms.map((f) => [f.id, f.name]));
     for (const d of dLines) {
       const h = head.get(d.dispatchId)!;
-      events.push({ at: d.dispatchCreatedAt, unit: unitLabel(d.unit, it.unit), date: d.dispatchDate, kind: "dispatch", change: -d.quantity, by: userName.get(h.createdBy) ?? "?", dispatchId: d.dispatchId, partyName: partyName.get(d.partyId) });
+      // Another firm's dispatch from the shared godown: show the firm, not its client (and no link into that firm).
+      const firm = state.firmOf.get(d.dispatchId) ?? ctx.companyId;
+      const own = firm === ctx.companyId;
+      events.push({
+        at: d.dispatchCreatedAt,
+        unit: unitLabel(d.unit, it.unit),
+        date: d.dispatchDate,
+        kind: "dispatch",
+        change: -d.quantity,
+        by: userName.get(h.createdBy) ?? "?",
+        dispatchId: own ? d.dispatchId : undefined,
+        partyName: own ? partyName.get(d.partyId) : `🏢 ${firmName.get(firm) ?? "?"}`,
+      });
     }
   }
   events.sort((a, b) => b.date.localeCompare(a.date) || b.at.getTime() - a.at.getTime());

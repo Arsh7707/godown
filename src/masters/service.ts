@@ -9,7 +9,7 @@ import { LedgerError } from "@/lib/errors";
 import { normalizeName } from "@/lib/normalize";
 import { centiToDecimal, toCenti } from "@/lib/qty";
 import { and, eq } from "drizzle-orm";
-import type { Ctx } from "@/ledger/service";
+import { stockOf, type Ctx } from "@/ledger/service";
 
 /** Owners and staff can add a new party or item while making an entry; changing existing ones is owner-only (Phase 4). */
 function requireCreator(ctx: Ctx) {
@@ -54,7 +54,7 @@ export async function createItem(
     const [it] = await tx
       .insert(items)
       .values({
-        companyId: ctx.companyId,
+        companyId: stockOf(ctx),
         name: input.name.trim(),
         unit: input.unit.trim(),
         product: (input.product ?? input.name).trim(),
@@ -65,7 +65,7 @@ export async function createItem(
       .returning();
     for (const alias of input.aliases ?? []) {
       await tx.insert(itemAliases).values({
-        companyId: ctx.companyId,
+        companyId: stockOf(ctx),
         itemId: it.id,
         alias,
         normalized: normalizeName(alias),
@@ -110,7 +110,7 @@ export async function createProduct(
 export async function updateItemSettings(db: Db, ctx: Ctx, itemId: string, input: { lowStockLevel?: string | number; addAliases?: string[] }) {
   if (ctx.role !== "owner") throw new LedgerError("FORBIDDEN", "Only owners can change items");
   return db.transaction(async (tx) => {
-    const [before] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.companyId, ctx.companyId)));
+    const [before] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.companyId, stockOf(ctx))));
     if (!before) throw new LedgerError("NOT_FOUND", "Item not found");
     if (input.lowStockLevel !== undefined) {
       await tx
@@ -122,7 +122,7 @@ export async function updateItemSettings(db: Db, ctx: Ctx, itemId: string, input
       if (!alias.trim()) continue;
       await tx
         .insert(itemAliases)
-        .values({ companyId: ctx.companyId, itemId, alias: alias.trim(), normalized: normalizeName(alias), createdBy: ctx.userId })
+        .values({ companyId: stockOf(ctx), itemId, alias: alias.trim(), normalized: normalizeName(alias), createdBy: ctx.userId })
         .onConflictDoNothing();
     }
     await tx.insert(auditLog).values({

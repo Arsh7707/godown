@@ -20,12 +20,12 @@ function later(name: string, fn: () => Promise<unknown>) {
 
 /** Anything that can move free stock: orders, dispatches, stock entries, low-level changes. */
 export function afterStockChange(user: SessionUser) {
-  later("low stock", async () => checkLowStock(db, await webPushSender(), user.companyId, user.userId));
+  later("low stock", async () => checkLowStock(db, await webPushSender(), user.stockId, user.userId));
 }
 
 export function afterDispatch(user: SessionUser, partyId: string, lines: { itemId: string; unit?: string | null }[], increasedKeys?: Set<string>) {
   later("over stock", async () =>
-    checkOverStock(db, await webPushSender(), { companyId: user.companyId, actorId: user.userId, actorName: user.name, partyId }, lines, increasedKeys),
+    checkOverStock(db, await webPushSender(), { companyId: user.companyId, stockId: user.stockId, actorId: user.userId, actorName: user.name, partyId }, lines, increasedKeys),
   );
   afterStockChange(user);
 }

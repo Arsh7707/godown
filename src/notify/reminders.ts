@@ -22,7 +22,7 @@ import { todayIST } from "@/lib/dates";
 import { formatQty } from "@/lib/qty";
 import { unitKey, unitLabel } from "@/lib/units";
 import { pushText, type StaffAction } from "./text";
-import { notifyUsers, ownerIds, type PushSender } from "./push";
+import { notifyUsers, ownerIds, poolOwnerIds, type PushSender } from "./push";
 
 const LIST = 3;
 
@@ -79,7 +79,7 @@ export async function sendMorningDigests(db: Db, send: PushSender, now = new Dat
     const owners = await ownerIds(db, c.id);
     if (!owners.length) continue;
     const d = await buildDigest(db, c.id, today);
-    if (d) sent += await notifyUsers(db, send, c.id, owners, (u) => digestMessage(d, u.language));
+    if (d) sent += await notifyUsers(db, send, owners, (u) => digestMessage(d, u.language));
   }
   return sent;
 }
@@ -89,7 +89,9 @@ export async function sendMorningDigests(db: Db, send: PushSender, now = new Dat
  * The first run for a company only records the current state (no flood of
  * alerts for items that were never stocked).
  */
-export async function checkLowStock(db: Db, send: PushSender | null, companyId: string, actorId: string) {
+export async function checkLowStock(db: Db, send: PushSender | null, stockId: string, actorId: string) {
+  // State is kept per godown: firms sharing one see the same stock.
+  const companyId = stockId;
   const rows = await stockOverview(db, { companyId, userId: actorId, role: "owner" });
   const known = new Map(
     (await db.select({ key: stockAlertState.key, low: stockAlertState.low }).from(stockAlertState).where(eq(stockAlertState.companyId, companyId))).map((r) => [r.key, r.low]),
@@ -113,8 +115,9 @@ export async function checkLowStock(db: Db, send: PushSender | null, companyId: 
     if (flipped.length && r.low) newlyLow.push(r);
   }
   if (!newlyLow.length || !send) return newlyLow;
-  const owners = await ownerIds(db, companyId, actorId);
-  await notifyUsers(db, send, companyId, owners, (u) => {
+  const [actor] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, actorId));
+  const owners = await poolOwnerIds(db, stockId, actor?.phone);
+  await notifyUsers(db, send, owners, (u) => {
     const t = pushText(u.language);
     return {
       title: t.lowTitle,
@@ -133,14 +136,14 @@ export async function checkLowStock(db: Db, send: PushSender | null, companyId: 
 export async function checkOverStock(
   db: Db,
   send: PushSender | null,
-  ctx: { companyId: string; actorId: string; actorName: string; partyId: string },
+  ctx: { companyId: string; stockId?: string; actorId: string; actorName: string; partyId: string },
   lines: { itemId: string; unit?: string | null }[],
   increasedKeys?: Set<string>,
 ) {
   const keys = new Map(lines.map((l) => [unitKey(l.itemId, l.unit ?? null), l]));
   for (const k of keys.keys()) if (increasedKeys && !increasedKeys.has(k)) keys.delete(k);
   if (!keys.size) return [];
-  const levels = await stockLevels(db, ctx.companyId, [...new Set([...keys.values()].map((l) => l.itemId))]);
+  const levels = await stockLevels(db, ctx.stockId ?? ctx.companyId, [...new Set([...keys.values()].map((l) => l.itemId))]);
   const short = [...keys].map(([k, l]) => ({ ...l, inStock: levels.get(k)?.inStock ?? 0 })).filter((l) => l.inStock < 0);
   if (!short.length || !send) return short;
 
@@ -150,7 +153,7 @@ export async function checkOverStock(
   ]);
   const item = new Map(its.map((i) => [i.id, i]));
   const owners = await ownerIds(db, ctx.companyId, ctx.actorId);
-  await notifyUsers(db, send, ctx.companyId, owners, (u) => {
+  await notifyUsers(db, send, owners, (u) => {
     const t = pushText(u.language);
     const what = short.map((s) => `${item.get(s.itemId)?.name}: ${formatQty(-s.inStock)} ${unitLabel(s.unit ?? null, item.get(s.itemId)?.unit ?? "")} ${t.short}`);
     return {
@@ -189,7 +192,7 @@ export async function notifyStaffActivity(db: Db, send: PushSender | null, actor
     return `${i?.name ?? "?"} ${String(l.quantity).trim()} ${unitLabel(l.unit ?? null, i?.unit ?? "")}`;
   });
   const owners = await ownerIds(db, actor.companyId, actor.userId);
-  return notifyUsers(db, send, actor.companyId, owners, (u) => {
+  return notifyUsers(db, send, owners, (u) => {
     const t = pushText(u.language);
     const head = [party?.name ?? ev.name, listWithMore(what, t.more)].filter(Boolean).join(": ");
     return { title: `${actor.name} · ${t.act[ev.action]}`, body: head, url: ev.url, tag: `staff-${ev.action}-${Date.now()}` };
@@ -203,7 +206,7 @@ export async function notifyStaffActivity(db: Db, send: PushSender | null, actor
 export async function sendStockKeeperReminders(db: Db, send: PushSender, now = new Date()) {
   const today = todayIST(now);
   let sent = 0;
-  for (const c of await db.select({ id: companies.id }).from(companies)) {
+  for (const c of await db.select({ id: companies.id, stockCompanyId: companies.stockCompanyId }).from(companies)) {
     const keepers = (
       await db
         .select({ id: users.id })
@@ -211,18 +214,19 @@ export async function sendStockKeeperReminders(db: Db, send: PushSender, now = n
         .where(and(eq(users.companyId, c.id), eq(users.stockKeeper, true), eq(users.active, true)))
     ).map((u) => u.id);
     if (!keepers.length) continue;
+    // A shared godown: goods in entered from any of its firms counts.
     const [{ n }] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(stockMovements)
       .where(
         and(
-          eq(stockMovements.companyId, c.id),
+          eq(stockMovements.companyId, c.stockCompanyId ?? c.id),
           eq(stockMovements.kind, "receipt"),
           sql`(${stockMovements.createdAt} at time zone 'Asia/Kolkata')::date = ${today}::date`,
         ),
       );
     if (n > 0) continue;
-    sent += await notifyUsers(db, send, c.id, keepers, (u) => {
+    sent += await notifyUsers(db, send, keepers, (u) => {
       const t = pushText(u.language);
       return { title: t.stockTitle, body: t.stockBody, url: "/stock/in", tag: "stock-keeper" };
     });

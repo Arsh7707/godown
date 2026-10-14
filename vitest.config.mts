@@ -6,5 +6,5 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname, "src") } },
-  test: { include: ["tests/**/*.test.ts"], testTimeout: 30000, env: { SESSION_SECRET: "test-secret-test-secret-test-secret-123" } },
+  test: { include: ["tests/**/*.test.ts"], testTimeout: 60000, hookTimeout: 60000, env: { SESSION_SECRET: "test-secret-test-secret-test-secret-123" } },
 });

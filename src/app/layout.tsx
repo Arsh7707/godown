@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorker } from "@/components/service-worker";
+import { currentUser } from "@/auth/session";
 
 export const metadata: Metadata = {
   title: "Godown",
@@ -17,9 +18,15 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const user = await currentUser();
   return (
     <html lang="hi" className="h-full antialiased">
+      <head>
+        {/* The firm this screen belongs to: sent with every request so nothing lands in another firm after a switch. */}
+        {user && <meta name="godown-firm" content={user.companyId} />}
+        {user && <meta name="godown-firm-name" content={user.companyName} />}
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <ServiceWorker />

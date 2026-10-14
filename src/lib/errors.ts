@@ -29,7 +29,17 @@ export type LedgerErrorCode =
   | "SELF_CHANGE"
   | "INVALID_GSTIN"
   | "INVALID_AADHAAR"
-  | "TAX_ID_TAKEN";
+  | "TAX_ID_TAKEN"
+  | "NAME_TOO_LONG"
+  | "TOO_MANY_FIRMS"
+  | "FIRM_NAME_TAKEN"
+  | "STOCK_LOOP"
+  | "STOCK_SHARED_BY_OTHERS"
+  | "FIRM_HAS_ITEMS"
+  | "FIRM_HAS_ENTRIES"
+  | "IMPORT_TOO_BIG"
+  | "IMPORT_EMPTY"
+  | "IMPORT_STALE";
 
 /** Expected, user-facing rule violations. `details` carries numbers for the UI to localise. */
 export class LedgerError extends Error {

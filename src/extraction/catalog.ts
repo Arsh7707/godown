@@ -3,13 +3,13 @@ import type { Db } from "@/db/types";
 import { itemAliases, items, parties, partyAliases } from "@/db/schema";
 import type { Catalog } from "./types";
 
-/** Active parties and items with their aliases, for one company. */
-export async function loadCatalog(db: Db, companyId: string): Promise<Catalog> {
+/** Active parties and items with their aliases, for one firm. Items come from `stockId` when the firm shares a godown. */
+export async function loadCatalog(db: Db, companyId: string, stockId = companyId): Promise<Catalog> {
   const [ps, pa, its, ia] = await Promise.all([
     db.select().from(parties).where(and(eq(parties.companyId, companyId), eq(parties.active, true))),
     db.select().from(partyAliases).where(eq(partyAliases.companyId, companyId)),
-    db.select().from(items).where(and(eq(items.companyId, companyId), eq(items.active, true))),
-    db.select().from(itemAliases).where(eq(itemAliases.companyId, companyId)),
+    db.select().from(items).where(and(eq(items.companyId, stockId), eq(items.active, true))),
+    db.select().from(itemAliases).where(eq(itemAliases.companyId, stockId)),
   ]);
   const aliasesOf = (rows: { alias: string; ownerId: string }[], id: string) => rows.filter((r) => r.ownerId === id).map((r) => r.alias);
   const pAliases = pa.map((a) => ({ alias: a.alias, ownerId: a.partyId }));

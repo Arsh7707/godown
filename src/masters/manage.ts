@@ -13,7 +13,7 @@ import { auditLog, dispatchLines, dispatchRevisions, itemAliases, items, orderLi
 import { LedgerError } from "@/lib/errors";
 import { normalizeName } from "@/lib/normalize";
 import { centiToDecimal, toCenti } from "@/lib/qty";
-import type { Ctx } from "@/ledger/service";
+import { stockOf, type Ctx } from "@/ledger/service";
 import { stockOverview } from "@/stock/service";
 import { createItem, variantName } from "./service";
 import { partyProfileSet, safeTaxId, type PartyProfileInput } from "./profiles";
@@ -41,10 +41,12 @@ export async function partyUsed(db: Db, companyId: string, partyId: string): Pro
   return o.n + d.n > 0;
 }
 
-export async function itemUsed(db: Db, companyId: string, itemId: string): Promise<boolean> {
+/** `stockId`: the firm holding the item. Orders and dispatches of any firm sharing that godown count. */
+export async function itemUsed(db: Db, stockId: string, itemId: string): Promise<boolean> {
+  const companyId = stockId;
   const [[o], [d], [s]] = await Promise.all([
-    db.select({ n: sql<number>`count(*)::int` }).from(orderLineVersions).where(and(eq(orderLineVersions.companyId, companyId), eq(orderLineVersions.itemId, itemId))),
-    db.select({ n: sql<number>`count(*)::int` }).from(dispatchLines).where(and(eq(dispatchLines.companyId, companyId), eq(dispatchLines.itemId, itemId))),
+    db.select({ n: sql<number>`count(*)::int` }).from(orderLineVersions).where(eq(orderLineVersions.itemId, itemId)),
+    db.select({ n: sql<number>`count(*)::int` }).from(dispatchLines).where(eq(dispatchLines.itemId, itemId)),
     db.select({ n: sql<number>`count(*)::int` }).from(stockMovements).where(and(eq(stockMovements.companyId, companyId), eq(stockMovements.itemId, itemId))),
   ]);
   return o.n + d.n + s.n > 0;
@@ -76,7 +78,7 @@ async function assertNameFree(db: Db, ctx: Ctx, table: "party" | "item", name: s
   const rows =
     table === "party"
       ? await db.select({ id: parties.id, name: parties.name }).from(parties).where(and(eq(parties.companyId, ctx.companyId), ne(parties.id, exceptId)))
-      : await db.select({ id: items.id, name: items.name }).from(items).where(and(eq(items.companyId, ctx.companyId), ne(items.id, exceptId)));
+      : await db.select({ id: items.id, name: items.name }).from(items).where(and(eq(items.companyId, stockOf(ctx)), ne(items.id, exceptId)));
   if (rows.some((r) => normalizeName(r.name) === n)) throw new LedgerError("DUPLICATE_NAME", "That name is already used");
 }
 
@@ -85,7 +87,7 @@ async function addAliasRow(db: Db, ctx: Ctx, kind: "party" | "item", ownerId: st
   if (!a) return;
   try {
     if (kind === "party") await db.insert(partyAliases).values({ companyId: ctx.companyId, partyId: ownerId, alias: a, normalized: normalizeName(a), createdBy: ctx.userId });
-    else await db.insert(itemAliases).values({ companyId: ctx.companyId, itemId: ownerId, alias: a, normalized: normalizeName(a), createdBy: ctx.userId });
+    else await db.insert(itemAliases).values({ companyId: stockOf(ctx), itemId: ownerId, alias: a, normalized: normalizeName(a), createdBy: ctx.userId });
   } catch (e) {
     if (isUnique(e)) throw new LedgerError("ALIAS_TAKEN", "That extra name is already used", { alias: a });
     throw e;
@@ -158,8 +160,8 @@ export async function deleteParty(db: Db, ctx: Ctx, partyId: string) {
 export async function itemsForManage(db: Db, ctx: Ctx) {
   requireOwner(ctx);
   const [its, as, stock] = await Promise.all([
-    db.select().from(items).where(eq(items.companyId, ctx.companyId)),
-    db.select().from(itemAliases).where(eq(itemAliases.companyId, ctx.companyId)),
+    db.select().from(items).where(eq(items.companyId, stockOf(ctx))),
+    db.select().from(itemAliases).where(eq(itemAliases.companyId, stockOf(ctx))),
     stockOverview(db, ctx),
   ]);
   const st = new Map(stock.map((s) => [s.itemId, s]));
@@ -191,7 +193,7 @@ export async function updateItem(
 ) {
   requireOwner(ctx);
   return db.transaction(async (tx) => {
-    const [before] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.companyId, ctx.companyId)));
+    const [before] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.companyId, stockOf(ctx))));
     if (!before) throw new LedgerError("NOT_FOUND", "Item not found");
     const product = before.product ?? before.name;
     const set: Partial<typeof items.$inferInsert> = {};
@@ -214,7 +216,7 @@ export async function updateItem(
     } else newName = undefined;
 
     if (input.unit !== undefined && input.unit.trim() !== before.unit) {
-      if (await itemUsed(tx, ctx.companyId, itemId)) throw new LedgerError("UNIT_LOCKED", "The unit can't change after the item is used");
+      if (await itemUsed(tx, stockOf(ctx), itemId)) throw new LedgerError("UNIT_LOCKED", "The unit can't change after the item is used");
       set.unit = input.unit.trim() || before.unit;
     }
     if (input.lowStockLevel !== undefined) set.lowStockLevel = centiToDecimal(toCenti(String(input.lowStockLevel)));
@@ -222,7 +224,7 @@ export async function updateItem(
     if (Object.keys(set).length) await tx.update(items).set(set).where(eq(items.id, itemId));
 
     if (newName) {
-      const [taken] = await tx.select({ id: itemAliases.id }).from(itemAliases).where(and(eq(itemAliases.companyId, ctx.companyId), eq(itemAliases.normalized, normalizeName(before.name))));
+      const [taken] = await tx.select({ id: itemAliases.id }).from(itemAliases).where(and(eq(itemAliases.companyId, stockOf(ctx)), eq(itemAliases.normalized, normalizeName(before.name))));
       if (!taken) await addAliasRow(tx, ctx, "item", itemId, before.name);
     }
     await log(tx, ctx, "item.update", "item", itemId, {
@@ -238,14 +240,14 @@ export async function renameProduct(db: Db, ctx: Ctx, oldProduct: string, newPro
   const np = newProduct.trim();
   if (!np) throw new LedgerError("NAME_REQUIRED", "Name is required");
   return db.transaction(async (tx) => {
-    const members = await tx.select().from(items).where(and(eq(items.companyId, ctx.companyId), eq(items.product, oldProduct)));
+    const members = await tx.select().from(items).where(and(eq(items.companyId, stockOf(ctx)), eq(items.product, oldProduct)));
     if (!members.length) throw new LedgerError("NOT_FOUND", "Product not found");
     for (const m of members) {
       const name = m.variant ? variantName(np, m.variant) : np;
       if (normalizeName(name) === normalizeName(m.name)) continue;
       await assertNameFree(tx, ctx, "item", name, m.id);
       await tx.update(items).set({ product: np, name }).where(eq(items.id, m.id));
-      const [taken] = await tx.select({ id: itemAliases.id }).from(itemAliases).where(and(eq(itemAliases.companyId, ctx.companyId), eq(itemAliases.normalized, normalizeName(m.name))));
+      const [taken] = await tx.select({ id: itemAliases.id }).from(itemAliases).where(and(eq(itemAliases.companyId, stockOf(ctx)), eq(itemAliases.normalized, normalizeName(m.name))));
       if (!taken) await addAliasRow(tx, ctx, "item", m.id, m.name);
     }
     await log(tx, ctx, "product.rename", "item", members[0].id, { from: oldProduct, to: np, items: members.length });
@@ -255,7 +257,7 @@ export async function renameProduct(db: Db, ctx: Ctx, oldProduct: string, newPro
 /** Add a colour/size to an existing product, same unit and alert level. */
 export async function addVariant(db: Db, ctx: Ctx, product: string, variant: string) {
   requireOwner(ctx);
-  const [sibling] = await db.select().from(items).where(and(eq(items.companyId, ctx.companyId), eq(items.product, product)));
+  const [sibling] = await db.select().from(items).where(and(eq(items.companyId, stockOf(ctx)), eq(items.product, product)));
   if (!sibling) throw new LedgerError("NOT_FOUND", "Product not found");
   const name = variantName(product, variant);
   await assertNameFree(db, ctx, "item", name, "00000000-0000-0000-0000-000000000000");
@@ -264,7 +266,7 @@ export async function addVariant(db: Db, ctx: Ctx, product: string, variant: str
 
 export async function addItemAlias(db: Db, ctx: Ctx, itemId: string, alias: string) {
   requireOwner(ctx);
-  const [it] = await db.select({ id: items.id }).from(items).where(and(eq(items.id, itemId), eq(items.companyId, ctx.companyId)));
+  const [it] = await db.select({ id: items.id }).from(items).where(and(eq(items.id, itemId), eq(items.companyId, stockOf(ctx))));
   if (!it) throw new LedgerError("NOT_FOUND", "Item not found");
   await addAliasRow(db, ctx, "item", itemId, alias);
   await log(db, ctx, "item.alias.add", "item", itemId, { alias });
@@ -272,7 +274,7 @@ export async function addItemAlias(db: Db, ctx: Ctx, itemId: string, alias: stri
 
 export async function removeItemAlias(db: Db, ctx: Ctx, aliasId: string) {
   requireOwner(ctx);
-  const [a] = await db.select().from(itemAliases).where(and(eq(itemAliases.id, aliasId), eq(itemAliases.companyId, ctx.companyId)));
+  const [a] = await db.select().from(itemAliases).where(and(eq(itemAliases.id, aliasId), eq(itemAliases.companyId, stockOf(ctx))));
   if (!a) throw new LedgerError("NOT_FOUND", "Not found");
   await db.delete(itemAliases).where(eq(itemAliases.id, aliasId));
   await log(db, ctx, "item.alias.remove", "item", a.itemId, { alias: a.alias });
@@ -282,9 +284,9 @@ export async function removeItemAlias(db: Db, ctx: Ctx, aliasId: string) {
 export async function deleteItem(db: Db, ctx: Ctx, itemId: string) {
   requireOwner(ctx);
   return db.transaction(async (tx) => {
-    const [it] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.companyId, ctx.companyId)));
+    const [it] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.companyId, stockOf(ctx))));
     if (!it) throw new LedgerError("NOT_FOUND", "Item not found");
-    if (await itemUsed(tx, ctx.companyId, itemId)) throw new LedgerError("IN_USE", "Already used: hide it instead");
+    if (await itemUsed(tx, stockOf(ctx), itemId)) throw new LedgerError("IN_USE", "Already used: hide it instead");
     await tx.delete(itemAliases).where(eq(itemAliases.itemId, itemId));
     await tx.delete(items).where(eq(items.id, itemId));
     await log(tx, ctx, "item.delete", "item", itemId, { name: it.name });

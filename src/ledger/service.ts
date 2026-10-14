@@ -41,6 +41,8 @@ export interface Ctx {
   companyId: string;
   userId: string;
   role: Role;
+  /** The firm whose items and stock this firm uses (shared godown). Omitted = its own. */
+  stockId?: string;
   /** Injectable clock for tests. */
   now?: Date;
 }
@@ -106,9 +108,21 @@ async function authorizeCorrection(tx: Db, ctx: Ctx, header: typeof orders | typ
 
 // ---------------------------------------------------------------- helpers
 
+/** Where this firm's items and stock live: its own id, or the firm it shares a godown with. */
+export const stockOf = (ctx: Pick<Ctx, "companyId" | "stockId">) => ctx.stockId ?? ctx.companyId;
+
 /** One writer at a time per company, so allocations and stock counts never race. */
 export async function lockCompany(tx: Db, companyId: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${companyId}))`);
+}
+
+/**
+ * Lock the firm and, when it shares a godown, the stock firm too. Always in
+ * this order (own firm first, stock firm last), so two firms never deadlock.
+ */
+export async function lockFirm(tx: Db, ctx: Pick<Ctx, "companyId" | "stockId">) {
+  await lockCompany(tx, ctx.companyId);
+  if (stockOf(ctx) !== ctx.companyId) await lockCompany(tx, stockOf(ctx));
 }
 
 export async function audit(tx: Db, ctx: Ctx, action: string, entityType: string, entityId: string, details: unknown) {
@@ -190,7 +204,7 @@ export async function createOrder(db: Db, ctx: Ctx, input: CreateOrderInput): Pr
 
   try {
     return await db.transaction(async (tx) => {
-      await lockCompany(tx, ctx.companyId);
+      await lockFirm(tx, ctx);
 
       const [existing] = await tx
         .select({ id: orders.id })
@@ -201,10 +215,10 @@ export async function createOrder(db: Db, ctx: Ctx, input: CreateOrderInput): Pr
       await assertParty(tx, ctx.companyId, input.partyId);
       await assertItems(
         tx,
-        ctx.companyId,
+        stockOf(ctx),
         parsed.map((l) => l.itemId),
       );
-      const lines = await resolveUnits(tx, ctx.companyId, parsed);
+      const lines = await resolveUnits(tx, stockOf(ctx), parsed);
 
       const [order] = await tx
         .insert(orders)
@@ -319,7 +333,7 @@ export async function correctOrder(db: Db, ctx: Ctx, orderId: string, input: Cor
   if (!parsed.length) throw new LedgerError("NO_LINES", "At least one line is required");
 
   return db.transaction(async (tx) => {
-    await lockCompany(tx, ctx.companyId);
+    await lockFirm(tx, ctx);
     await authorizeCorrection(tx, ctx, orders, orderId);
     const [cur] = await currentOrderRevisions(tx, ctx.companyId, orderId);
     if (!cur) throw new LedgerError("NOT_FOUND", "Order not found", { orderId });
@@ -329,10 +343,10 @@ export async function correctOrder(db: Db, ctx: Ctx, orderId: string, input: Cor
     await assertParty(tx, ctx.companyId, input.partyId);
     await assertItems(
       tx,
-      ctx.companyId,
+      stockOf(ctx),
       parsed.map((l) => l.itemId),
     );
-    const lines = await resolveUnits(tx, ctx.companyId, parsed);
+    const lines = await resolveUnits(tx, stockOf(ctx), parsed);
 
     const { lines: before } = await loadState(tx, ctx.companyId, { orderId });
     const beforeById = new Map(before.map((l) => [l.orderLineId, l]));
@@ -435,7 +449,7 @@ export async function correctOrder(db: Db, ctx: Ctx, orderId: string, input: Cor
 export async function cancelOrder(db: Db, ctx: Ctx, orderId: string, input: { baseRev: number; reason?: string | null }) {
   authorize(ctx, "create");
   return db.transaction(async (tx) => {
-    await lockCompany(tx, ctx.companyId);
+    await lockFirm(tx, ctx);
     await authorizeCorrection(tx, ctx, orders, orderId);
     const [cur] = await currentOrderRevisions(tx, ctx.companyId, orderId);
     if (!cur) throw new LedgerError("NOT_FOUND", "Order not found", { orderId });
@@ -506,7 +520,7 @@ function validateDispatch(ctx: Ctx, input: DispatchFields) {
 /** What a dispatch would allocate if confirmed now. Shown on the confirmation screen; writes nothing. */
 export async function previewDispatch(db: Db, ctx: Ctx, input: DispatchFields, opts: { excludeDispatchId?: string } = {}): Promise<DispatchPlan> {
   authorize(ctx, "create");
-  const lines = await resolveUnits(db, ctx.companyId, validateDispatch(ctx, input));
+  const lines = await resolveUnits(db, stockOf(ctx), validateDispatch(ctx, input));
   // When editing a dispatch, preview as if its current version were not there.
   const state = await loadState(db, ctx.companyId, { partyId: input.partyId, excludeDispatchId: opts.excludeDispatchId });
   return toPlan(planFifo(input.partyId, state.lines, lines));
@@ -602,7 +616,7 @@ export async function createDispatch(db: Db, ctx: Ctx, input: CreateDispatchInpu
 
   try {
     return await db.transaction(async (tx) => {
-      await lockCompany(tx, ctx.companyId);
+      await lockFirm(tx, ctx);
       const [existing] = await tx
         .select({ id: dispatches.id })
         .from(dispatches)
@@ -612,10 +626,10 @@ export async function createDispatch(db: Db, ctx: Ctx, input: CreateDispatchInpu
       await assertParty(tx, ctx.companyId, input.partyId);
       await assertItems(
         tx,
-        ctx.companyId,
+        stockOf(ctx),
         parsed.map((l) => l.itemId),
       );
-      const lines = await resolveUnits(tx, ctx.companyId, parsed);
+      const lines = await resolveUnits(tx, stockOf(ctx), parsed);
 
       const [d] = await tx
         .insert(dispatches)
@@ -647,7 +661,7 @@ export async function correctDispatch(
   authorize(ctx, "create");
   const parsed = validateDispatch(ctx, input);
   return db.transaction(async (tx) => {
-    await lockCompany(tx, ctx.companyId);
+    await lockFirm(tx, ctx);
     await authorizeCorrection(tx, ctx, dispatches, dispatchId);
     const [cur] = await currentDispatchRevisions(tx, ctx.companyId, dispatchId);
     if (!cur) throw new LedgerError("NOT_FOUND", "Dispatch not found", { dispatchId });
@@ -656,10 +670,10 @@ export async function correctDispatch(
     await assertParty(tx, ctx.companyId, input.partyId);
     await assertItems(
       tx,
-      ctx.companyId,
+      stockOf(ctx),
       parsed.map((l) => l.itemId),
     );
-    const lines = await resolveUnits(tx, ctx.companyId, parsed);
+    const lines = await resolveUnits(tx, stockOf(ctx), parsed);
 
     const source = { channel: "app", inputMethod: "form", sourceAttachmentId: cur.sourceAttachmentId, sourceText: cur.sourceText } as const;
     const { rev, plan } = await writeDispatchRevision(tx, ctx, dispatchId, cur.rev + 1, { ...input, ...source }, lines, true);
@@ -678,7 +692,7 @@ export async function correctDispatch(
 export async function cancelDispatch(db: Db, ctx: Ctx, dispatchId: string, input: { baseRev: number; reason?: string | null }) {
   authorize(ctx, "create");
   return db.transaction(async (tx) => {
-    await lockCompany(tx, ctx.companyId);
+    await lockFirm(tx, ctx);
     await authorizeCorrection(tx, ctx, dispatches, dispatchId);
     const [cur] = await currentDispatchRevisions(tx, ctx.companyId, dispatchId);
     if (!cur) throw new LedgerError("NOT_FOUND", "Dispatch not found", { dispatchId });
@@ -734,7 +748,7 @@ export async function linkUnmatched(
   authorize(ctx, "correct");
   const qty = toPositiveCenti(input.quantity);
   return db.transaction(async (tx) => {
-    await lockCompany(tx, ctx.companyId);
+    await lockFirm(tx, ctx);
     const state = await loadState(tx, ctx.companyId);
     const d = state.dispatchLines.find((x) => x.dispatchLineId === input.dispatchLineId);
     const o = state.lines.find((x) => x.orderLineId === input.orderLineId);

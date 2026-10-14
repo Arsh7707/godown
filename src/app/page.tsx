@@ -7,11 +7,13 @@ import { messages } from "@/i18n/messages";
 import { AppHeader } from "@/components/app-header";
 import { InstallPrompt } from "@/components/install-prompt";
 import { OutboxStatus } from "@/components/outbox-status";
+import { myFirms } from "@/masters/firms";
 
 export default async function Home() {
   const user = await requireUser();
   const t = messages(user.language);
-  const lowItems = (await stockOverview(db, ctxFor(user))).filter((r) => r.low || r.inStock < 0);
+  const [overview, firms] = await Promise.all([stockOverview(db, ctxFor(user)), myFirms(db, user)]);
+  const lowItems = overview.filter((r) => r.low || r.inStock < 0);
   const tiles = [
     { href: "/order/new", label: t.newOrder, hint: t.newOrderHint, icon: "📝", cls: "bg-[#1f4e79] text-white" },
     { href: "/dispatch/new", label: t.dispatch, hint: t.dispatchHint, icon: "🚚", cls: "bg-[#2e7d4f] text-white" },
@@ -19,7 +21,7 @@ export default async function Home() {
   ];
   return (
     <>
-      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} menu={{ role: user.role, stockKeeper: user.stockKeeper, lowCount: lowItems.length }} />
+      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} menu={{ role: user.role, stockKeeper: user.stockKeeper, lowCount: lowItems.length, firms: firms.map((f) => ({ companyId: f.companyId, name: f.name, current: f.current })) }} />
       <LiveRefresh seconds={30} />
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-5">
         <OutboxStatus t={t} />

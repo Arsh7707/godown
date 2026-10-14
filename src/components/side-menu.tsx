@@ -6,12 +6,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { messages, type Lang } from "@/i18n/messages";
 import { ReminderSettings } from "./reminder-settings";
+import { switchFirm } from "@/client/firm";
 
 export interface MenuInfo {
   role: "owner" | "staff" | "viewer";
   stockKeeper: boolean;
   /** Items low or below zero, shown as a badge on Stock. */
   lowCount: number;
+  /** Every firm this person is in (current one included). */
+  firms: { companyId: string; name: string; current: boolean }[];
 }
 
 /** ☰ button and the panel that slides in from the left with every section of the app. */
@@ -28,6 +31,9 @@ export function SideMenu({
 }) {
   const t = messages(lang);
   const [open, setOpen] = useState(false);
+  const [firmsOpen, setFirmsOpen] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null);
+  const otherFirms = info.firms.filter((f) => !f.current);
   // The panel is rendered on <body>: the header's blur would otherwise clip a fixed panel to the header.
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -92,7 +98,12 @@ export function SideMenu({
         { href: "/manage/items", icon: "🏷️", label: t.m.items },
         { href: "/manage/team", icon: "🧑‍🤝‍🧑", label: t.m.team },
         { href: "/manage/company", icon: "🏢", label: t.m.company },
+        { href: "/manage/import", icon: "📊", label: t.imp.menu },
       ].map((l) => ({ ...l, show: info.role === "owner" })),
+    },
+    {
+      title: t.f.title,
+      links: [{ href: "/firms", icon: "🏭", label: otherFirms.length ? t.f.allFirms : t.f.title }],
     },
   ];
   const roleLabel = {
@@ -142,7 +153,14 @@ export function SideMenu({
             >
               <div className="flex items-start justify-between gap-3 bg-[#1f4e79] px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-white">
                 <div className="min-w-0">
-                  <p className="truncate text-lg font-bold">{companyName}</p>
+                  {otherFirms.length ? (
+                    <button type="button" onClick={() => setFirmsOpen((v) => !v)} aria-expanded={firmsOpen} className="flex max-w-full items-center gap-2 text-left">
+                      <span className="truncate text-lg font-bold">{companyName}</span>
+                      <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">⇄ {t.f.switch}</span>
+                    </button>
+                  ) : (
+                    <p className="truncate text-lg font-bold">{companyName}</p>
+                  )}
                   <p className="truncate text-sm opacity-80">
                     {userName} · {roleLabel}
                     {info.stockKeeper ? ` · 📦 ${t.m.stockKeeper}` : ""}
@@ -157,6 +175,31 @@ export function SideMenu({
                   ×
                 </button>
               </div>
+
+              {firmsOpen && otherFirms.length > 0 && (
+                <div className="space-y-1 border-b border-stone-200 bg-white px-3 py-3">
+                  <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-stone-500">{t.f.switchTo}</p>
+                  {otherFirms.map((f) => (
+                    <button
+                      key={f.companyId}
+                      type="button"
+                      disabled={!!switching}
+                      onClick={async () => {
+                        setSwitching(f.companyId);
+                        const r = await switchFirm(f.companyId, "/").catch(() => null);
+                        if (!r?.ok) setSwitching(null);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-lg active:bg-stone-100 disabled:opacity-50"
+                    >
+                      <span className="w-7 text-center text-xl" aria-hidden>
+                        🏢
+                      </span>
+                      <span className="flex-1 truncate">{f.name}</span>
+                      {switching === f.companyId && <span className="text-sm text-stone-500">…</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
                 {sections.map((sec) => {

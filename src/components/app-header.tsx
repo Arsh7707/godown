@@ -24,7 +24,8 @@ export function AppHeader({ companyName, userName, lang, back, title, menu }: { 
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-lg font-bold text-[#1f4e79]">{title ?? companyName}</p>
-          {!title && <p className="truncate text-xs text-stone-500">{userName}</p>}
+          {/* Inner screens name the firm too, so an entry never goes into the wrong one unnoticed. */}
+          <p className="truncate text-xs text-stone-500">{title ? `🏢 ${companyName}` : userName}</p>
         </div>
         <LangToggle lang={lang} onChange={setLang} />
       </div>

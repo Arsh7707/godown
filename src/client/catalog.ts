@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getJson, NetworkError } from "./api";
+import { currentFirm, getJson, NetworkError } from "./api";
 
 export interface CatalogParty {
   id: string;
@@ -16,11 +16,12 @@ export interface Catalog {
   items: CatalogItem[];
 }
 
-const KEY = "ob_catalog_v1";
+/** One saved copy per firm: firms have different clients (and maybe items). */
+const key = () => `ob_catalog_v1:${currentFirm() ?? ""}`;
 
 function cached(): Catalog | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key());
     return raw ? (JSON.parse(raw) as Catalog) : null;
   } catch {
     return null;
@@ -39,7 +40,7 @@ export function useCatalog() {
         const next = { parties: r.parties, items: r.items };
         setCatalog(next);
         try {
-          localStorage.setItem(KEY, JSON.stringify(next));
+          localStorage.setItem(key(), JSON.stringify(next));
         } catch {}
       })
       .catch((e) => {
