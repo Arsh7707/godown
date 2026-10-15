@@ -47,7 +47,9 @@ export async function requestCode(
   opts: { requiredAccessCode?: string; now?: Date } = {},
 ) {
   const now = opts.now ?? new Date();
-  if (opts.requiredAccessCode && input.accessCode !== opts.requiredAccessCode) throw new LoginFailure("ACCESS_CODE");
+  // Phones capitalise the first letter and add a space after a word; a saved setting can end in a line break.
+  const same = (a: string | undefined, b: string) => (a ?? "").trim().toLowerCase() === b.trim().toLowerCase();
+  if (opts.requiredAccessCode?.trim() && !same(input.accessCode, opts.requiredAccessCode)) throw new LoginFailure("ACCESS_CODE");
   const phone = normalizePhone(input.phone);
   if (!phone) throw new LoginFailure("INVALID_PHONE");
   if (!(await activeMemberships(db, phone)).length) throw new LoginFailure("NOT_REGISTERED");

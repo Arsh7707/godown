@@ -54,6 +54,10 @@ describe("OTP login", () => {
     await expect(requestCode(db, dev, { phone: "123" })).rejects.toMatchObject({ code: "INVALID_PHONE" });
     await expect(requestCode(db, dev, { phone: OWNER, accessCode: "nope" }, { requiredAccessCode: "family" })).rejects.toMatchObject({ code: "ACCESS_CODE" });
     await expect(requestCode(db, dev, { phone: OWNER, accessCode: "family" }, { requiredAccessCode: "family" })).resolves.toBeTruthy();
+    // As an iPhone types it ("Family "), or as saved with a line break at the end.
+    await expect(requestCode(db, dev, { phone: OWNER, accessCode: "Family " }, { requiredAccessCode: "family\n" })).resolves.toBeTruthy();
+    await expect(requestCode(db, dev, { phone: OWNER, accessCode: "" }, { requiredAccessCode: "family" })).rejects.toMatchObject({ code: "ACCESS_CODE" });
+    await expect(requestCode(db, dev, { phone: OWNER, accessCode: "famil" }, { requiredAccessCode: "family" })).rejects.toMatchObject({ code: "ACCESS_CODE" });
   });
 
   it("limits code requests per hour", async () => {

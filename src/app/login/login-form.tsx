@@ -77,7 +77,7 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
           {needsAccessCode && (
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-stone-600">{t.accessCodeLabel}</span>
-              <input className={field} value={accessCode} onChange={(e) => setAccessCode(e.target.value)} autoComplete="off" required />
+              <input className={field} value={accessCode} onChange={(e) => setAccessCode(e.target.value)} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} required />
               <span className="block text-xs text-stone-500">{t.accessCodeHint}</span>
             </label>
           )}
