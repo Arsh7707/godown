@@ -41,6 +41,8 @@
   "exclude": [
     "node_modules",
     "scripts/zz-*",
-    ".next-e2e"
+    ".next-e2e",
+    ".stryker-tmp",
+    "reports"
   ]
 }

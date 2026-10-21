@@ -39,7 +39,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
           <Link href={`/history?date=${addDays(day, -1)}`} aria-label="previous day" className="rounded-xl border-2 border-stone-300 bg-white px-4 py-3 text-lg font-bold">
             ◀
           </Link>
-          <DayPicker day={day} today={today} />
+          <DayPicker day={day} today={today} label={t.h.day} />
           {day < today ? (
             <Link href={`/history?date=${addDays(day, 1)}`} aria-label="next day" className="rounded-xl border-2 border-stone-300 bg-white px-4 py-3 text-lg font-bold">
               ▶

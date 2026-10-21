@@ -145,6 +145,8 @@ export function SideMenu({
           <div
             className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`}
             aria-hidden={!open}
+            // Closed: its links can't be reached by keyboard or screen reader either.
+            inert={!open}
           >
             <div
               onClick={() => setOpen(false)}

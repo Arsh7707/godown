@@ -1,0 +1,49 @@
+# Every hour: is the live site up and answering? One issue while it is down,
+# closed by itself when it is back.
+name: Uptime
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      down: ${{ steps.check.outputs.down }}
+    steps:
+      - id: check
+        name: Login page, API lock and app files
+        run: |
+          down=""
+          check() { # url expected-status
+            for _ in 1 2 3; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$1")
+              [ "$code" = "$2" ] && return 0
+              sleep 20
+            done
+            echo "::error::$1 answered $code (expected $2)"; down="yes"
+          }
+          check https://godown-blond.vercel.app/login 200
+          check https://godown-blond.vercel.app/api/catalog 401
+          check https://godown-blond.vercel.app/manifest.webmanifest 200
+          echo "down=$down" >> "$GITHUB_OUTPUT"
+          [ -z "$down" ]
+
+  report:
+    needs: [ping]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await require('./.github/scripts/failure-issue.cjs')({ github, context, failed: ${{ needs.ping.result == 'failure' }}, title: "Live site is down", body: "https://godown-blond.vercel.app did not answer as expected (checked 3 times, 20 s apart)." });

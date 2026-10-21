@@ -1,0 +1,50 @@
+# Weekly: how good are the tests? Stryker plants thousands of small bugs in
+# the calculation code and counts how many the tests catch. The score and the
+# bugs that slipped through are in the run summary and the report artifact.
+name: Test strength (mutation)
+
+on:
+  schedule:
+    - cron: "0 20 * * 6" # Sunday 1:30 am India
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mutation
+        env:
+          PROPERTY_RUNS: 3
+          MUTATION_CONCURRENCY: 4
+      - name: Score in the run summary
+        if: always()
+        run: node .github/scripts/mutation-summary.cjs || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: reports/mutation
+          retention-days: 30
+
+  report:
+    needs: [mutation]
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await require('./.github/scripts/failure-issue.cjs')({ github, context, failed: ${{ needs.mutation.result == 'failure' }}, title: "Test strength dropped below 85%", body: "Planted bugs in the calculation code went unnoticed by the tests. The run summary lists which ones; add tests that catch them." });

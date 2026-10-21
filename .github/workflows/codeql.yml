@@ -1,0 +1,26 @@
+# GitHub's code scanner: looks through the code for security mistakes
+# (injection, unsafe redirects, leaking data). Results: Security tab → Code scanning.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 22 * * 0" # Monday 3:30 am India
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+      - uses: github/codeql-action/analyze@v3

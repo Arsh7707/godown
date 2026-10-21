@@ -1,0 +1,40 @@
+# Right after Vercel puts a new version live, check the live site (read-only).
+# Vercel tells GitHub when a deployment finishes; this runs on that signal.
+name: After deploy
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: Check the new live version
+    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The production address (other Vercel addresses ask for a Vercel login).
+      - run: npm run test:live-smoke
+
+  report:
+    needs: [live]
+    if: always() && needs.live.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await require('./.github/scripts/failure-issue.cjs')({ github, context, failed: ${{ needs.live.result == 'failure' }}, title: "Live site broken after deploy", body: "The read-only check of https://godown-blond.vercel.app failed right after a deploy. To go back: Vercel → Deployments → the previous one → Promote to Production." });

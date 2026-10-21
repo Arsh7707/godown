@@ -1,5 +1,7 @@
-# Every night (and on demand from the Actions tab): much longer random-history
-# and fuzzing runs than on each push, plus a read-only check of the live site.
+# Every night (and on demand from the Actions tab): far longer random-history
+# and fuzzing runs than on each push, each browser test twice to catch flaky
+# ones, two Node versions, and the live site. A failure opens a GitHub issue
+# (you get an email); it closes by itself once the night is green again.
 name: Nightly
 
 on:
@@ -7,9 +9,36 @@ on:
     - cron: "30 21 * * *" # 3:00 am India
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  deep:
-    name: Deep calculation and fuzz runs
+  calculations:
+    name: 300 random histories (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: All unit tests
+        run: npm test
+        env:
+          PROPERTY_RUNS: 25
+      - name: Deep random histories of orders, dispatches and stock
+        run: npx vitest run tests/properties.test.ts
+        env:
+          PROPERTY_RUNS: 300
+
+  browser:
+    name: Browser tests ×2, deep fuzzing, strict accessibility report
     runs-on: ubuntu-latest
     timeout-minutes: 90
     services:
@@ -32,13 +61,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: 300 random histories of orders, dispatches and stock
-        run: npx vitest run tests/properties.test.ts
-        env:
-          PROPERTY_RUNS: 300
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium webkit
-      - run: npx playwright test
-      - if: failure()
+      - name: Every browser test twice (a test that fails only sometimes is a bug too)
+        run: npx playwright test --repeat-each=2 --retries=0
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nightly-report
@@ -60,3 +90,18 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:live-smoke
+
+  report:
+    name: Open or close the issue
+    needs: [calculations, browser, live]
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const failed = ${{ contains(needs.*.result, 'failure') }};
+            await require('./.github/scripts/failure-issue.cjs')({ github, context, failed, title: "Nightly checks failing" });

@@ -10,6 +10,8 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_" }],
     },
   },
+  // GitHub Actions helper scripts are CommonJS (actions/github-script loads them with require).
+  { files: [".github/scripts/*.cjs"], rules: { "@typescript-eslint/no-require-imports": "off" } },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -20,6 +22,8 @@ const eslintConfig = defineConfig([
     "scripts/zz-*",
     // Browser test build and reports
     ".next-e2e/**",
+    ".stryker-tmp/**",
+    "reports/**",
     "playwright-report/**",
     "test-results/**",
     "coverage/**",

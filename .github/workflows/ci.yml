@@ -5,16 +5,20 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   checks:
     name: Types, lint, unit and calculation tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,14 +28,64 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm test
+      - name: Tests, with coverage
+        run: npm run test:coverage
         env:
           PROPERTY_RUNS: 25
+      - name: Coverage table in the run summary
+        if: always()
+        run: node .github/scripts/coverage-summary.cjs || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 14
+
+  database:
+    name: Migrations on Postgres ${{ matrix.postgres }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # Supabase runs 15 and 17; tests use 16.
+        postgres: [15, 17]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: migrate_check
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/migrate_check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Every migration applies to an empty database
+        run: npx drizzle-kit migrate
+      - name: Applying them again changes nothing
+        run: npx drizzle-kit migrate
+      - name: The schema in code matches the migrations (no change left unmigrated)
+        run: |
+          npx drizzle-kit generate --name drift_check < /dev/null
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            echo "::error::src/db/schema.ts has changes with no migration. Run: npx drizzle-kit generate"
+            git status --porcelain drizzle
+            exit 1
+          fi
 
   browser:
     name: Browser tests (iPhone screen, Chrome + Safari engines)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:16
@@ -51,10 +105,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Cache browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium webkit
       - run: npx playwright test
-      - name: Keep the report (screenshots, step-by-step traces) when something fails
-        if: failure()
+      - name: Keep the report (screenshots, step-by-step traces)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
@@ -62,3 +121,37 @@ jobs:
             playwright-report
             test-results
           retention-days: 14
+
+  security:
+    name: Security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the secret scan reads the whole history
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: No known high-risk holes in what runs on the server
+        run: npm audit --omit=dev --audit-level=high
+      - name: No secrets committed by mistake
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-review:
+    name: New dependencies are safe
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

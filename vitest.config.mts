@@ -12,6 +12,6 @@ export default defineConfig({
     hookTimeout: 60000,
     env: { SESSION_SECRET: "test-secret-test-secret-test-secret-123" },
     // npm run test:coverage → coverage/index.html shows which lines no test runs.
-    coverage: { provider: "v8", include: ["src/**/*.ts"], exclude: ["src/**/*.d.ts"], reporter: ["text-summary", "html"] },
+    coverage: { provider: "v8", include: ["src/**/*.ts"], exclude: ["src/**/*.d.ts"], reporter: ["text-summary", "html", "json-summary"] },
   },
 });
