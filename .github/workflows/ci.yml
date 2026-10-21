@@ -138,7 +138,7 @@ jobs:
       - name: No known high-risk holes in what runs on the server
         run: npm audit --omit=dev --audit-level=high
       - name: No secrets committed by mistake
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
