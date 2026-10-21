@@ -1,4 +1,5 @@
 "use client";
+import { formatDay } from "@/lib/dates";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -7,7 +8,7 @@ import type { DispatchSummary } from "@/ledger/queries";
 import { formatQty } from "@/lib/qty";
 
 const norm = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, "");
-const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const fmtDate = (d: string) => formatDay(d, { weekday: true, year: true });
 
 export function DispatchedView({ lang, list, showingCancelled }: { lang: Lang; list: DispatchSummary[]; showingCancelled: boolean }) {
   const t = messages(lang);

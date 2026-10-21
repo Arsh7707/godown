@@ -1,0 +1,62 @@
+# Every night (and on demand from the Actions tab): much longer random-history
+# and fuzzing runs than on each push, plus a read-only check of the live site.
+name: Nightly
+
+on:
+  schedule:
+    - cron: "30 21 * * *" # 3:00 am India
+  workflow_dispatch:
+
+jobs:
+  deep:
+    name: Deep calculation and fuzz runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: godown_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      E2E_DATABASE_URL: postgres://postgres:postgres@localhost:5432/godown_e2e
+      E2E_SAFARI: 1
+      FUZZ_RUNS: 2000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 300 random histories of orders, dispatches and stock
+        run: npx vitest run tests/properties.test.ts
+        env:
+          PROPERTY_RUNS: 300
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+
+  live:
+    name: Live site check (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:live-smoke

@@ -5,12 +5,12 @@ import { stockLevels } from "@/stock/service";
 import { dispatchForEdit } from "@/ledger/queries";
 import { toCenti } from "@/lib/qty";
 import { unitKey } from "@/lib/units";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 
 /** Where a dispatch would go (oldest open order first) before it is saved. */
 export async function POST(req: Request) {
   return withUser(async (user) => {
-    const b = (await req.json().catch(() => ({}))) as { partyId?: string; dispatchDate?: string; lines?: { itemId: string; quantity: string; unit?: string | null }[]; excludeDispatchId?: string };
+    const b = (await readJson(req)) as { partyId?: string; dispatchDate?: string; lines?: { itemId: string; quantity: string; unit?: string | null }[]; excludeDispatchId?: string };
     if (!b.partyId || !b.dispatchDate || !b.lines?.length) return fail("INCOMPLETE");
     const plan = await previewDispatch(db, ctxFor(user), { partyId: b.partyId, dispatchDate: b.dispatchDate, lines: b.lines }, { excludeDispatchId: b.excludeDispatchId });
     // In-stock count per item, so the form can warn before sending more than is there.

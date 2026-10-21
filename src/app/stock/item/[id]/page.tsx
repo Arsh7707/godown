@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
+import { isUuid } from "@/lib/ids";
 import { ctxFor, requireUser } from "@/auth/session";
 import { itemStockHistory } from "@/stock/service";
 import { LedgerError } from "@/lib/errors";
@@ -15,6 +16,7 @@ const signed = (c: number) => (c > 0 ? `+${formatQty(c)}` : c < 0 ? `−${format
 
 export default async function ItemStockPage({ params }: PageProps<"/stock/item/[id]">) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const user = await requireUser();
   const t = messages(user.language);
   const { item, unitRows, events } = await itemStockHistory(db, ctxFor(user), id).catch((e) => {

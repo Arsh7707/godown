@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db/client";
+import { isUuid } from "@/lib/ids";
 import { ctxFor, requireUser } from "@/auth/session";
 import { dispatchForEdit } from "@/ledger/queries";
 import { LedgerError } from "@/lib/errors";
@@ -10,6 +11,7 @@ import { EditScreen } from "@/components/entry/edit-screen";
 
 export default async function EditDispatchPage({ params, searchParams }: PageProps<"/dispatches/[id]/edit">) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const { back } = await searchParams;
   const user = await requireUser();
   const t = messages(user.language);

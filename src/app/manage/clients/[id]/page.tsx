@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db/client";
+import { isUuid } from "@/lib/ids";
 import { ctxFor, requireUser } from "@/auth/session";
 import { partiesForManage, partyUsed } from "@/masters/manage";
 import { AppHeader } from "@/components/app-header";
@@ -7,6 +8,7 @@ import { ClientEditor } from "./client-editor";
 
 export default async function ClientPage({ params }: PageProps<"/manage/clients/[id]">) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const user = await requireUser();
   if (user.role !== "owner") redirect("/");
   const p = (await partiesForManage(db, ctxFor(user))).find((x) => x.id === id);

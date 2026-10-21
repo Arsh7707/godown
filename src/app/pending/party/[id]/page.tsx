@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
+import { isUuid } from "@/lib/ids";
 import { ctxFor, requireUser } from "@/auth/session";
 import { partyOrders } from "@/ledger/queries";
 import { LedgerError } from "@/lib/errors";
@@ -12,6 +13,7 @@ const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-
 
 export default async function PartyPendingPage({ params }: PageProps<"/pending/party/[id]">) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const user = await requireUser();
   const t = messages(user.language);
   const data = await partyOrders(db, ctxFor(user), id).catch((e) => {

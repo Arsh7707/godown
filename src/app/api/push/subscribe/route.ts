@@ -1,6 +1,6 @@
 import { db } from "@/db/client";
 import { removeSubscription, saveSubscription, vapidPublicKey } from "@/notify/push";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 
 /** The public key a phone needs to subscribe; null when reminders aren't set up. */
 export async function GET() {
@@ -16,7 +16,7 @@ interface Body {
 export async function POST(req: Request) {
   return withUser(async (user) => {
     if (user.role !== "owner" && !user.stockKeeper) return fail("FORBIDDEN", 403);
-    const b = (await req.json().catch(() => ({}))) as Body;
+    const b = (await readJson(req)) as Body;
     if (!b.endpoint?.startsWith("https://") || !b.keys?.p256dh || !b.keys.auth) return fail("INCOMPLETE");
     await saveSubscription(db, user, { endpoint: b.endpoint, p256dh: b.keys.p256dh, auth: b.keys.auth }, req.headers.get("user-agent"));
     return json({ ok: true });
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   return withUser(async (user) => {
-    const b = (await req.json().catch(() => ({}))) as Body;
+    const b = (await readJson(req)) as Body;
     if (b.endpoint) await removeSubscription(db, user.userId, b.endpoint);
     return json({ ok: true });
   });

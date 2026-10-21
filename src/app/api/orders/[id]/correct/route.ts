@@ -2,7 +2,7 @@ import { db } from "@/db/client";
 import { ctxFor } from "@/auth/session";
 import { correctOrder } from "@/ledger/service";
 import { buildShare } from "@/entries/save";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 import { afterStaffAction, afterStockChange } from "@/notify/hooks";
 
 interface Body {
@@ -19,7 +19,7 @@ interface Body {
 export async function POST(req: Request, { params }: RouteContext<"/api/orders/[id]/correct">) {
   const { id } = await params;
   return withUser(async (user) => {
-    const b = (await req.json().catch(() => ({}))) as Body;
+    const b = (await readJson(req)) as Body;
     if (typeof b.baseRev !== "number" || !b.partyId || !b.date || !b.lines?.length) return fail("INCOMPLETE");
     const r = await correctOrder(db, ctxFor(user), id, {
       baseRev: b.baseRev,

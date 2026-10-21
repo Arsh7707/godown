@@ -2,7 +2,7 @@ import { db } from "@/db/client";
 import { ctxFor } from "@/auth/session";
 import { findUnmatched, linkMany } from "@/ledger/service";
 import { markUnmatchedOk, orderFromUnmatched, reopenUnmatched } from "@/ledger/unmatched";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 
 /** Goods sent to this party with no open order, to offer when a new order is saved. */
 export async function GET(req: Request) {
@@ -22,7 +22,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function POST(req: Request) {
   return withUser(async (user) => {
     const ctx = ctxFor(user);
-    const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const b = (await readJson(req)) as Record<string, unknown>;
     const id = (k: string) => (typeof b[k] === "string" && UUID.test(b[k] as string) ? (b[k] as string) : null);
     switch (b.action) {
       case "link": {

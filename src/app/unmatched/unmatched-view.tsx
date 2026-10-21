@@ -1,4 +1,5 @@
 "use client";
+import { formatDay } from "@/lib/dates";
 
 import { useRef, useState } from "react";
 import Link from "next/link";
@@ -9,7 +10,7 @@ import { NetworkError, newId, postJson } from "@/client/api";
 import { errorText } from "@/components/entry/entry-form";
 import { formatQty } from "@/lib/qty";
 
-const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+const fmtDate = (d: string) => formatDay(d);
 
 /** "12.5" → 1250; null if not a positive amount with at most 2 decimals. */
 function toCenti(s: string): number | null {

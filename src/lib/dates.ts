@@ -46,3 +46,31 @@ export function addDays(s: string, n: number): string {
 export function pastDay(s: string | undefined, now: Date = new Date()): string | undefined {
   return s && isValidDate(s) && s < todayIST(now) ? s : undefined;
 }
+
+// Display formats, spelled out here rather than by the browser: Safari and the
+// server's Node write "en-IN" dates differently ("Tue, 20 Oct, 2026" vs
+// "Tue, 20 Oct 2026", "am" vs "AM"), and a screen drawn on the server must read
+// exactly the same once the phone takes over.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const IST_OFFSET_MS = 330 * 60_000; // India has no daylight saving
+
+/** "20 Oct", "20 Oct 2026", "Tue, 20 Oct 2026" for a YYYY-MM-DD date. */
+export function formatDay(s: string, opts: { year?: boolean; weekday?: boolean } = {}): string {
+  const d = new Date(`${s}T00:00:00Z`);
+  const day = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}${opts.year ? ` ${d.getUTCFullYear()}` : ""}`;
+  return opts.weekday ? `${WEEKDAYS[d.getUTCDay()]}, ${day}` : day;
+}
+
+/** "9:33 am" in India. */
+export function formatTimeIST(at: Date | number | string): string {
+  const d = new Date(new Date(at).getTime() + IST_OFFSET_MS);
+  const h = d.getUTCHours();
+  return `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+}
+
+/** "20 Oct, 9:33 am" in India. */
+export function formatDateTimeIST(at: Date | number | string): string {
+  const d = new Date(new Date(at).getTime() + IST_OFFSET_MS);
+  return `${formatDay(d.toISOString().slice(0, 10))}, ${formatTimeIST(at)}`;
+}

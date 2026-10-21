@@ -5,6 +5,7 @@ import { fail, json, withUser } from "@/lib/api";
 
 export async function GET(req: Request) {
   return withUser(async (user) => {
+    if (user.role === "staff") return fail("FORBIDDEN", 403);
     const q = new URL(req.url).searchParams;
     const from = q.get("from");
     const to = q.get("to");

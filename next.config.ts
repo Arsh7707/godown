@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Browser tests build into their own folder so they never clash with `next dev`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Almost every screen is per-user live data, so plain dynamic rendering is simpler than Cache Components.
   turbopack: {
     rules: {

@@ -1,6 +1,6 @@
 import { db } from "@/db/client";
 import { createFirm, myFirms, setFirmStock, switchFirm } from "@/masters/firms";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 
 /** The person's firms: list, switch, add, and own stock vs shared godown. */
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   return withUser(async (user) => {
-    const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const b = (await readJson(req)) as Record<string, unknown>;
     const str = (k: string) => (typeof b[k] === "string" ? (b[k] as string) : null);
     switch (b.action) {
       case "switch":

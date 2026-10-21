@@ -1,4 +1,5 @@
 "use client";
+import { formatDay } from "@/lib/dates";
 
 import { useEffect, useMemo, useState } from "react";
 import type { Messages } from "@/i18n/messages";
@@ -92,11 +93,9 @@ export function EntryForm({
   const unmatchedKey = kind === "order" && !correcting && f.partyId && body.lines.length ? `${f.partyId}|${linesKey}` : null;
   const plan = planKey && planFor?.key === planKey ? planFor.plan : null;
   // Dispatch: items that would go below zero in stock (allowed after a warning).
-  const shortfalls = plan
-    ? body.lines
-        .map((l) => ({ itemId: l.itemId, unit: l.unit, sending: toCenti(l.quantity), inStock: planFor!.stock[unitKey(l.itemId, l.unit)] ?? 0 }))
-        .filter((s) => s.sending > s.inStock)
-    : [];
+  const shortfallsIn = (stock: Record<string, number>) =>
+    body.lines.map((l) => ({ itemId: l.itemId, unit: l.unit, sending: toCenti(l.quantity), inStock: stock[unitKey(l.itemId, l.unit)] ?? 0 })).filter((s) => s.sending > s.inStock);
+  const shortfalls = plan ? shortfallsIn(planFor!.stock) : [];
   const unmatched = unmatchedKey && unmatchedFor?.key === unmatchedKey ? unmatchedFor.rows : [];
 
   // Dispatch: this party's pending items, to fill lines with one tap.
@@ -122,19 +121,22 @@ export function EntryForm({
   }
 
   // Dispatch: show where the goods will go (oldest open order first).
+  async function loadPlan(key: string) {
+    const [partyId, dispatchDate, lines] = key.split("|");
+    const r = await postJson<{ plan: DispatchPlan; stock: Record<string, number> }>("/api/dispatches/preview", {
+      partyId,
+      dispatchDate,
+      lines: JSON.parse(lines),
+      excludeDispatchId: mode.type === "correctDispatch" ? mode.dispatchId : undefined,
+    }).catch(() => null);
+    if (!r?.ok) return null;
+    const loaded = { key, plan: r.plan, stock: r.stock ?? {} };
+    setPlanFor(loaded);
+    return loaded;
+  }
   useEffect(() => {
     if (!planKey) return;
-    const [partyId, dispatchDate, lines] = planKey.split("|");
-    const h = setTimeout(() => {
-      postJson<{ plan: DispatchPlan; stock: Record<string, number> }>("/api/dispatches/preview", {
-        partyId,
-        dispatchDate,
-        lines: JSON.parse(lines),
-        excludeDispatchId: mode.type === "correctDispatch" ? mode.dispatchId : undefined,
-      })
-        .then((r) => r.ok && setPlanFor({ key: planKey, plan: r.plan, stock: r.stock ?? {} }))
-        .catch(() => {});
-    }, 400);
+    const h = setTimeout(() => loadPlan(planKey), 400);
     return () => clearTimeout(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planKey]);
@@ -339,14 +341,23 @@ export function EntryForm({
             <button
               type="button"
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
                 if (!complete) {
                   setShowMissing(true);
                   if (missing[0]) document.getElementById(missing[0].id)?.scrollIntoView({ behavior: "smooth", block: "center" });
                   return;
                 }
+                // The stock check loads a moment after typing; a quick tap on Save waits for it
+                // (offline it can't load, and the dispatch is kept on the phone as before).
+                let short = shortfalls;
+                if (planKey && !plan) {
+                  setBusy(true);
+                  const loaded = await loadPlan(planKey);
+                  setBusy(false);
+                  if (loaded) short = shortfallsIn(loaded.stock);
+                }
                 // Sending more than is in stock: allowed, but only after a second tap on the warning.
-                if (shortfalls.length && !overStockOk) {
+                if (short.length && !overStockOk) {
                   setOverStockOk(true);
                   return;
                 }
@@ -422,7 +433,7 @@ export function errorText(t: Messages, code: string, details?: Record<string, un
 }
 
 export function Allocation({ t, plan, itemById }: { t: Messages; plan: DispatchPlan; itemById: Map<string, CatalogItem> }) {
-  const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const fmtDate = (d: string) => formatDay(d);
   return (
     <div className="space-y-2 rounded-2xl bg-emerald-50 p-4 text-emerald-950">
       <p className="font-semibold">{t.e.goesTo}</p>

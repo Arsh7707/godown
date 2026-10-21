@@ -5,7 +5,7 @@ import { ctxFor } from "@/auth/session";
 import { recordStock, type StockEntryKind } from "@/stock/service";
 import { stockShareText, whatsappUrl } from "@/entries/share";
 import type { InputMethod } from "@/ledger/service";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 import { unitLabel } from "@/lib/units";
 import { afterLearn, afterStaffAction, afterStockChange } from "@/notify/hooks";
 import { picksFrom } from "@/masters/learn";
@@ -26,7 +26,7 @@ interface Body {
 /** Goods in, a stock count, or an adjustment. */
 export async function POST(req: Request) {
   return withUser(async (user) => {
-    const b = (await req.json().catch(() => ({}))) as Body;
+    const b = (await readJson(req)) as Body;
     if (!b.entryCaptureId || !b.date || !b.lines?.length || !["receipt", "count", "adjustment"].includes(b.kind ?? "")) return fail("INCOMPLETE");
     const r = await recordStock(db, ctxFor(user), {
       captureId: b.entryCaptureId,

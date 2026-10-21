@@ -1,6 +1,6 @@
 import { db } from "@/db/client";
 import { ctxFor } from "@/auth/session";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 import { CLIENT_FIELDS, ITEM_FIELDS, type Row } from "@/import/columns";
 import { applyClients, applyItems, MAX_ROWS, planClients, planItems, type Decision, type Decisions, type ItemOptions } from "@/import/plan";
 import { exportClients, exportItems } from "@/import/export";
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   return withUser(async (user) => {
     if (user.role !== "owner") return fail("FORBIDDEN", 403);
-    const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const b = (await readJson(req)) as Record<string, unknown>;
     const kind = b.kind === "items" ? "items" : b.kind === "clients" ? "clients" : null;
     if (!kind) return fail("UNKNOWN_ACTION");
     const rows = cleanRows(b.rows, kind);

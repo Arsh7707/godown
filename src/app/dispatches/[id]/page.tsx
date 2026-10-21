@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
+import { isUuid } from "@/lib/ids";
 import { ctxFor, requireUser } from "@/auth/session";
 import { dispatchDetail } from "@/ledger/queries";
 import { LedgerError } from "@/lib/errors";
@@ -14,6 +15,7 @@ const fmtTime = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata
 
 export default async function DispatchPage({ params }: PageProps<"/dispatches/[id]">) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const user = await requireUser();
   const t = messages(user.language);
   const d = await dispatchDetail(db, ctxFor(user), id).catch((e) => {

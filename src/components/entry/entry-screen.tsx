@@ -1,4 +1,5 @@
 "use client";
+import { formatDay } from "@/lib/dates";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -333,7 +334,7 @@ export function EntryScreen({
 
   const baseTitle = { order: t.e.newOrderTitle, dispatch: t.e.dispatchTitle, receipt: t.s.goodsIn, count: t.s.count }[kind];
   // Entering for a past day (from History): say which day in the title.
-  const title = day ? `${baseTitle} · ${new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : baseTitle;
+  const title = day ? `${baseTitle} · ${formatDay(day)}` : baseTitle;
 
   if (step.s === "form") {
     return (
@@ -709,7 +710,7 @@ function ReviewCard({
   }
 
   const blocking = entry.issues.filter((i) => i.blocking);
-  const fmtDate = (s: string) => new Date(`${s}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const fmtDate = (s: string) => formatDay(s, { year: true });
 
   return (
     <div className={`space-y-3 rounded-2xl border-2 bg-white p-4 shadow-sm ${entry.readyToConfirm ? "border-emerald-300" : "border-amber-300"}`}>

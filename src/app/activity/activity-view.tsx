@@ -1,4 +1,5 @@
 "use client";
+import { formatDay, formatTimeIST } from "@/lib/dates";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -10,8 +11,8 @@ import { errorText } from "@/components/entry/entry-form";
 const GROUPS: ActivityGroup[] = ["orders", "dispatches", "stock", "clients", "items", "settings", "imports"];
 const ICON: Record<string, string> = { order: "📝", dispatch: "🚚", stock: "📦", party: "👥", item: "🏷️", product: "🏷️", user: "🧑", company: "🏢", firm: "🏭", import: "📊" };
 const istDay = (d: Date) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-const istTime = (d: Date) => new Date(d).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" });
-const dayTitle = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const istTime = (d: Date) => formatTimeIST(d);
+const dayTitle = (d: string) => formatDay(d, { weekday: true, year: true });
 
 export function ActivityView({ lang, people, today }: { lang: Lang; people: { id: string; name: string; active: boolean }[]; today: string }) {
   const t = messages(lang);

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Pushing to main deploys to the live site, so nothing goes out that fails the
+# checks: types, lint, and every unit/calculation test (about 2 minutes).
+# Skip once in an emergency with: git push --no-verify
+echo "▶ Checking before push (types, lint, tests)…"
+npm run --silent check || {
+  echo ""
+  echo "✘ Checks failed, nothing was pushed. Fix the above, or push anyway with: git push --no-verify"
+  exit 1
+}

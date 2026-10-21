@@ -1,4 +1,5 @@
 "use client";
+import { formatDateTimeIST } from "@/lib/dates";
 
 import Link from "next/link";
 import { messages, type Lang } from "@/i18n/messages";
@@ -11,7 +12,7 @@ export function InboxView({ lang }: { lang: Lang }) {
   const t = messages(lang);
   const online = useAutoSync();
   const items = useOutbox();
-  const when = (ms: number) => new Date(ms).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const when = (ms: number) => formatDateTimeIST(ms);
   const kindLabel = (k: OutboxItem["kind"]) => ({ order: t.inbox.orderLabel, dispatch: t.inbox.dispatchLabel, receipt: t.s.goodsIn, count: t.s.count })[k];
   const what = (i: OutboxItem) =>
     i.type === "save" ? i.label : { photo: `📷 ${t.inbox.capturePhoto}`, voice: `🎤 ${t.inbox.captureVoice}`, text: `⌨️ ${t.inbox.captureText}` }[i.inputMethod] + (i.text ? `: ${i.text.slice(0, 60)}` : "");

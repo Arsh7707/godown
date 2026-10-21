@@ -11,7 +11,7 @@ import { recordClaudeUsage, recordSpeechUsage, overDailyLimit } from "@/entries/
 import { storage } from "@/storage";
 import { todayIST } from "@/lib/dates";
 import { displayScript } from "@/lib/script";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 
 export const maxDuration = 60;
 
@@ -22,7 +22,7 @@ export const maxDuration = 60;
 export async function POST(req: Request, { params }: RouteContext<"/api/orders/[id]/interpret">) {
   const { id } = await params;
   return withUser(async (user) => {
-    const b = (await req.json().catch(() => ({}))) as { captureId?: string; text?: string; audioAttachmentId?: string; audioSeconds?: number };
+    const b = (await readJson(req)) as { captureId?: string; text?: string; audioAttachmentId?: string; audioSeconds?: number };
     const captureId = b.captureId && /^[\w-]{8,80}$/.test(b.captureId) ? b.captureId : null;
     if (!captureId) return fail("BAD_CAPTURE_ID");
     const ctx = ctxFor(user);

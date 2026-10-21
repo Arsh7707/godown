@@ -7,7 +7,7 @@ import type { ExtractionResult } from "@/extraction/types";
 import { storage } from "@/storage";
 import { overDailyLimit, recordClaudeUsage, recordSpeechUsage } from "@/entries/usage";
 import { isValidDate, todayIST } from "@/lib/dates";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 
 // Transcription + reading can take ~30s on long voice notes.
 export const maxDuration = 60;
@@ -30,7 +30,7 @@ interface Body {
  */
 export async function POST(req: Request) {
   return withUser(async (user) => {
-    const b = (await req.json().catch(() => ({}))) as Body;
+    const b = (await readJson(req)) as Body;
     if (!b.captureId || !/^[\w-]{8,80}$/.test(b.captureId)) return fail("BAD_CAPTURE_ID");
     if (b.kind !== "order" && b.kind !== "dispatch" && b.kind !== "stock") return fail("BAD_KIND");
     if (!["photo", "voice", "text"].includes(b.inputMethod ?? "")) return fail("BAD_INPUT_METHOD");

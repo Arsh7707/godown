@@ -2,7 +2,7 @@ import { db } from "@/db/client";
 import { ctxFor } from "@/auth/session";
 import { correctDispatch } from "@/ledger/service";
 import { buildShare } from "@/entries/save";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 import { afterDispatch, afterStaffAction } from "@/notify/hooks";
 import { dispatchForEdit } from "@/ledger/queries";
 import { toCenti } from "@/lib/qty";
@@ -24,7 +24,7 @@ interface Body {
 export async function POST(req: Request, { params }: RouteContext<"/api/dispatches/[id]/correct">) {
   const { id } = await params;
   return withUser(async (user) => {
-    const b = (await req.json().catch(() => ({}))) as Body;
+    const b = (await readJson(req)) as Body;
     if (typeof b.baseRev !== "number" || !b.partyId || !b.date || !b.lines?.length) return fail("INCOMPLETE");
     // Only lines that now send more than before can newly go over stock.
     const before = new Map<string, number>();

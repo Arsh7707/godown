@@ -14,14 +14,14 @@ import {
   updateParty,
 } from "@/masters/manage";
 import { addUser, revealTaxId, updateCompany, updateUser, type Role } from "@/masters/profiles";
-import { fail, json, withUser } from "@/lib/api";
+import { fail, json, withUser, readJson } from "@/lib/api";
 import { afterStockChange } from "@/notify/hooks";
 
 /** Owner actions on clients and items (all checks happen in masters/manage.ts). */
 export async function POST(req: Request) {
   return withUser(async (user) => {
     const ctx = ctxFor(user);
-    const b = (await req.json().catch(() => ({}))) as Record<string, string | boolean | null | undefined>;
+    const b = (await readJson(req)) as Record<string, string | boolean | null | undefined>;
     const s = (k: string) => (typeof b[k] === "string" ? (b[k] as string) : "");
     /** A text field that was sent (string, or null to clear); undefined when absent. */
     const opt = (k: string) => (typeof b[k] === "string" ? (b[k] as string) : b[k] === null ? null : undefined);

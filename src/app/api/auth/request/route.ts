@@ -1,12 +1,12 @@
 import { db } from "@/db/client";
 import { LoginFailure, requestCode } from "@/auth/login";
 import { otpProvider } from "@/auth/otp-provider";
-import { fail, json } from "@/lib/api";
+import { fail, json, readJson } from "@/lib/api";
 
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { phone?: string; accessCode?: string };
+  const body = (await readJson(req)) as { phone?: string; accessCode?: string };
   try {
-    const r = await requestCode(db, otpProvider(), { phone: body.phone ?? "", accessCode: body.accessCode }, {
+    const r = await requestCode(db, otpProvider(), { phone: String(body.phone ?? ""), accessCode: typeof body.accessCode === "string" ? body.accessCode : undefined }, {
       // While codes are shown on screen (no SMS yet), a shared access code keeps strangers out.
       requiredAccessCode: process.env.OTP_DEV_MODE === "true" ? process.env.TEST_ACCESS_CODE || undefined : undefined,
     });

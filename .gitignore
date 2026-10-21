@@ -56,3 +56,9 @@ next-env.d.ts
 
 # Local throwaway browser-test scripts
 /scripts/zz-*
+
+# Browser tests
+/.next-e2e/
+/e2e/.state/
+/playwright-report/
+/test-results/

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
+import { isUuid } from "@/lib/ids";
 import { ctxFor, requireUser } from "@/auth/session";
 import { orderDetail } from "@/ledger/queries";
 import { LedgerError } from "@/lib/errors";
@@ -14,6 +15,7 @@ const fmtTime = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata
 
 export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const user = await requireUser();
   const t = messages(user.language);
   const o = await orderDetail(db, ctxFor(user), id).catch((e) => {

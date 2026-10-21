@@ -7,7 +7,7 @@ import type { ByUnit, Report } from "@/reports/service";
 import { getJson, NetworkError } from "@/client/api";
 import { errorText } from "@/components/entry/entry-form";
 import { formatQty } from "@/lib/qty";
-import { addDays } from "@/lib/dates";
+import { addDays, formatDay } from "@/lib/dates";
 
 type Tab = "dispatched" | "orders" | "pending" | "slow";
 type Preset = "today" | "week" | "month" | "lastMonth" | "30" | "custom";
@@ -19,7 +19,7 @@ const units = (q: ByUnit) =>
     .sort((a, b) => b[1] - a[1])
     .map(([u, v]) => `${formatQty(v)} ${u}`)
     .join(" · ") || "0";
-const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const fmtDate = (d: string) => formatDay(d, { year: true });
 
 function range(p: Preset, today: string): { from: string; to: string } {
   const [y, m] = today.split("-").map(Number);
