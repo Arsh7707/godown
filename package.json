@@ -17,7 +17,7 @@
     "check": "npm run typecheck && npm run lint && npm test",
     "check:all": "npm run check && npm run test:e2e:safari",
     "hooks:install": "git config core.hooksPath .githooks",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen >/dev/null && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "seed:demo": "tsx --env-file=.env.local scripts/seed-demo.ts",
