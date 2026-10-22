@@ -152,8 +152,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/dependency-review-action@v5
-        # Needs Settings → Security → "Dependency graph" switched on; until then it can't run, so it doesn't block.
-        continue-on-error: true
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
