@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -33,8 +33,8 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/github-script@v7
+      - uses: actions/checkout@v7
+      - uses: actions/github-script@v9
         with:
           script: |
             await require('./.github/scripts/failure-issue.cjs')({ github, context, failed: ${{ needs.live.result == 'failure' }}, title: "Live site broken after deploy", body: "The read-only check of https://godown-blond.vercel.app failed right after a deploy. To go back: Vercel → Deployments → the previous one → Promote to Production." });
