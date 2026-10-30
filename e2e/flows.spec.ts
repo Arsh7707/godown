@@ -10,14 +10,13 @@ import { PHONES } from "./env";
 
 test.describe.configure({ mode: "serial" });
 
-/** "In stock 40 · Owed 0" and "40 Free" for one item on the Stock screen. */
+/** In stock, owed and free for one item, as the Stock screen shows them. */
 async function stockRow(page: Page, item: string) {
   await page.goto("/stock", { waitUntil: "networkidle" });
-  const row = page.getByRole("row", { name: new RegExp(`^${item} `) });
+  const row = page.locator(`[data-stock-item="${item}"]`);
   const text = (await row.innerText()).replace(/\s+/g, " ");
-  const free = (await row.getByRole("cell").nth(1).innerText()).trim();
-  const num = (s: string, re: RegExp) => Number((s.match(re)?.[1] ?? "NaN").replace("−", "-"));
-  return { inStock: num(text, /In stock ([−\d.-]+)/), owed: num(text, /Owed ([−\d.-]+)/), free: num(free, /^([−\d.-]+)/), low: /Low/.test(free), text };
+  const num = async (k: string) => Number((await row.locator(`[data-stock="${k}"]`).innerText()).trim().replace("−", "-"));
+  return { inStock: await num("in"), owed: await num("owed"), free: await num("free"), low: /Low|below zero/.test(text), text };
 }
 
 /** A picker row: the name, then maybe its unit or town. */
@@ -52,7 +51,7 @@ test("log in through the screens with the code", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: "EN" }).click();
   await page.getByRole("textbox", { name: "Phone number" }).fill(PHONES.viewer);
-  await page.getByRole("button", { name: "Send code" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
   // No SMS in tests: the code is shown on screen.
   const code = (await page.locator(".font-mono").first().innerText()).trim();
   expect(code).toMatch(/^\d{6}$/);

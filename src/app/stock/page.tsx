@@ -12,7 +12,7 @@ export default async function StockPage() {
   const rows = await stockOverview(db, ctxFor(user));
   return (
     <>
-      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/" title={t.s.title} />
+      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} title={t.s.title} />
       <LiveRefresh />
       <StockView lang={user.language} rows={rows} canEnter={user.role !== "viewer"} isOwner={user.role === "owner"} />
     </>
