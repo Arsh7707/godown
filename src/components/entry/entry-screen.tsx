@@ -15,6 +15,8 @@ import { clearShared, readShared } from "@/client/shared";
 import { audioSeconds, compressImage, normalizeAudio, useRecorder } from "@/client/media";
 import { Allocation, EntryForm, stockPhrase, type SaveOutcome } from "./entry-form";
 import { SourceSummary } from "./source-summary";
+import { fill, words } from "@/lib/text";
+import { TaskHeader } from "./task-header";
 import { emptyForm, extractionKind, formFromDraft, isStock, payload, saveUrl, type EntrySource, type FormKind, type FormState } from "./form-state";
 
 type Kind = FormKind;
@@ -527,15 +529,8 @@ export function EntryScreen({
 function Shell({ t, title, children, back = "/" }: { t: Messages; title: string; children: React.ReactNode; back?: string }) {
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center gap-2">
-          <Link href={back} className="-ml-2 rounded-lg px-2 py-1 text-3xl leading-none text-[#1f4e79]" aria-label={t.e.home}>
-            ‹
-          </Link>
-          <h1 className="text-xl font-bold text-[#1f4e79]">{title}</h1>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-md flex-1 px-4 py-5">{children}</main>
+      <TaskHeader title={title} back={back} backLabel={t.ui.back} />
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 pt-5">{children}</main>
     </>
   );
 }
@@ -760,7 +755,7 @@ function ReviewCard({
         <div className="space-y-1 rounded-xl border-2 border-red-300 bg-red-50 p-3 text-red-900">
           {shortfalls.map((s) => (
             <p key={unitKey(s.itemId, s.unit)}>
-              ⚠ {itemById.get(s.itemId)?.name}: {stockPhrase(t, stock[unitKey(s.itemId, s.unit)] ?? 0)}, {t.s.sendingShort} {s.quantity} {unitLabel(s.unit, itemById.get(s.itemId)?.unit ?? "")}
+              {itemById.get(s.itemId)?.name}: {stockPhrase(t, stock[unitKey(s.itemId, s.unit)] ?? 0, unitLabel(s.unit, itemById.get(s.itemId)?.unit ?? ""))}, {fill(t.ui.stock.sending, { n: words(s.quantity, unitLabel(s.unit, itemById.get(s.itemId)?.unit ?? "")) })}
             </p>
           ))}
           {overStockOk && <p className="text-sm">{t.s.tapAgain}</p>}

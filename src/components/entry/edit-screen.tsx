@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { messages, type Lang } from "@/i18n/messages";
 import { useCatalog } from "@/client/catalog";
+import { TaskHeader } from "./task-header";
 import { EntryForm, type FormMode, type SaveOutcome } from "./entry-form";
 import type { EntrySource, FormState } from "./form-state";
 
@@ -34,15 +35,8 @@ export function EditScreen({
   const source: EntrySource = { entryCaptureId: "edit", captureId: null, inputMethod: "form", sourceAttachmentId: null, sourceText: null };
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center gap-2">
-          <Link href={backHref} className="-ml-2 rounded-lg px-2 py-1 text-3xl leading-none text-[#1f4e79]" aria-label={t.e.home}>
-            ‹
-          </Link>
-          <h1 className="truncate text-xl font-bold text-[#1f4e79]">{title}</h1>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-md flex-1 px-4 py-5">
+      <TaskHeader title={title} back={backHref} backLabel={t.ui.back} />
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 pt-5">
         {done ? (
           <div className="space-y-4">
             <p className="text-center text-2xl font-bold text-[#2e7d4f]">✓ {t.e.saved}</p>

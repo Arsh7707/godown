@@ -34,7 +34,7 @@ async function fillEntry(page: Page, path: string, party: string | null, lines: 
     await dialog.getByRole("button", { name: startsWith(party) }).first().click();
   }
   for (const [i, [item, qty]] of lines.entries()) {
-    if (i > 0) await page.getByRole("button", { name: "+ Add item" }).click();
+    if (i > 0) await page.getByRole("button", { name: "Add item", exact: true }).click();
     await page.getByRole("button", { name: "Pick item" }).first().click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("textbox").fill(item.split(" ")[0]);

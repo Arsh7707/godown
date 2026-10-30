@@ -8,6 +8,8 @@ export const SCREENS: Screen[] = [
   { path: () => "/" },
   { path: () => "/order/new", only: ["owner", "staff"] },
   { path: () => "/dispatch/new", only: ["owner", "staff"] },
+  { path: (s) => `/dispatch/new?order=${s.orderId}`, only: ["owner", "staff"] },
+  { path: (s) => `/orders/${s.orderId}/edit`, only: ["owner", "staff"] },
   { path: () => "/orders" },
   { path: (s) => `/orders?item=${s.d4012}` },
   { path: () => "/pending" },

@@ -41,7 +41,7 @@ export function QtyStepper({
       <button type="button" className={btn} onClick={() => step(-1)} aria-label={decLabel} disabled={!value.trim() || n <= 0}>
         <Icon name="minus" size={26} strokeWidth={2.6} />
       </button>
-      <label className="flex min-w-0 flex-1 items-baseline justify-center gap-1.5">
+      <label className="flex min-h-12 min-w-0 flex-1 items-center justify-center gap-1.5 self-stretch">
         <input
           id={id}
           aria-label={label}
@@ -51,7 +51,7 @@ export function QtyStepper({
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, ""))}
           onFocus={(e) => e.target.select()}
-          className="num w-full min-w-0 bg-transparent text-center text-2xl font-bold outline-none placeholder:text-base placeholder:font-normal placeholder:text-ink-subtle"
+          className="num h-12 w-full min-w-0 bg-transparent text-center text-2xl font-bold outline-none placeholder:text-base placeholder:font-normal placeholder:text-ink-subtle"
         />
         {unit && <span className="shrink-0 text-base text-ink-subtle">{unit}</span>}
       </label>

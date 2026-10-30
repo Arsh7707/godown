@@ -16,7 +16,7 @@ test.use({ viewport: { width: 360, height: 740 } });
 /** While working on one screen: `AUDIT_ONLY=orders npx playwright test ui-audit`. */
 const ONLY = process.env.AUDIT_ONLY ? new RegExp(process.env.AUDIT_ONLY) : null;
 /** Screens already moved to the new design; the rest join as they are redesigned. */
-const DONE = [/^\/orders/];
+const DONE = [/^\/orders/, /^\/dispatch\/new/];
 
 type Problem = { rule: string; what: string };
 
@@ -108,3 +108,24 @@ for (const role of ["owner", "staff"] as const) {
     }
   });
 }
+
+test.describe("sticky Save bar", () => {
+  test.use({ storageState: stateFile("owner") });
+
+  test("never covers the Notes field or the last field on order edit", async ({ page, seed }) => {
+    await page.goto(`/orders/${seed.orderId}/edit`, { waitUntil: "networkidle" });
+    const bar = page.getByRole("button", { name: "Save" }).locator("xpath=ancestor::div[contains(@class,'sticky')][1]");
+    for (const field of [page.getByRole("textbox", { name: "Notes" }), page.getByRole("textbox", { name: /Reason/ })]) {
+      await field.click();
+      await field.fill("call before sending");
+      const f = (await field.boundingBox())!;
+      const b = (await bar.boundingBox())!;
+      expect(f.y + f.height, "field bottom is above the Save bar").toBeLessThanOrEqual(b.y + 1);
+    }
+    // Scrolled to the very end, the bar sits below the page, not over it.
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const last = (await page.getByRole("textbox", { name: /Reason/ }).boundingBox())!;
+    const b = (await bar.boundingBox())!;
+    expect(last.y + last.height).toBeLessThanOrEqual(b.y + 1);
+  });
+});
