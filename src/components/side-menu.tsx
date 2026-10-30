@@ -142,12 +142,12 @@ export function SideMenu({
               aria-label={t.menu.open}
               className={`absolute inset-y-0 left-0 flex w-[84%] max-w-80 flex-col bg-canvas shadow-xl transition-transform duration-200 ease-out ${open ? "translate-x-0" : "-translate-x-full"}`}
             >
-              <div className="flex items-start justify-between gap-3 bg-brand px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-white">
+              <div className="flex items-start justify-between gap-3 bg-brand px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-ink-inverse">
                 <div className="min-w-0">
                   {otherFirms.length ? (
                     <button type="button" onClick={() => setFirmsOpen((v) => !v)} aria-expanded={firmsOpen} className="flex max-w-full items-center gap-2 text-left">
                       <span className="break-words text-lg font-bold">{companyName}</span>
-                      <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">⇄ {t.f.switch}</span>
+                      <span className="shrink-0 rounded-full bg-surface/20 px-2 py-0.5 text-xs font-semibold">⇄ {t.f.switch}</span>
                     </button>
                   ) : (
                     <p className="break-words text-lg font-bold">{companyName}</p>
@@ -168,7 +168,7 @@ export function SideMenu({
               </div>
 
               {firmsOpen && otherFirms.length > 0 && (
-                <div className="space-y-1 border-b border-line bg-white px-3 py-3">
+                <div className="space-y-1 border-b border-line bg-surface px-3 py-3">
                   <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">{t.f.switchTo}</p>
                   {otherFirms.map((f) => (
                     <button

@@ -39,16 +39,16 @@ export function EditScreen({
       <main className="mx-auto w-full max-w-lg flex-1 px-4 pt-5">
         {done ? (
           <div className="space-y-4">
-            <p className="text-center text-2xl font-bold text-[#2e7d4f]">✓ {t.e.saved}</p>
+            <p className="text-center text-2xl font-bold text-go">✓ {t.e.saved}</p>
             {!("queued" in done) && (
-              <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+              <div className="space-y-3 rounded-card bg-surface p-4 shadow-card">
                 <p className="text-lg">{done.text}</p>
-                <a href={done.url} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center rounded-xl bg-[#25d366] py-4 text-lg font-semibold text-white">
+                <a href={done.url} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center rounded-control bg-whatsapp py-4 text-lg font-semibold text-ink-inverse">
                   {t.e.share}
                 </a>
               </div>
             )}
-            <Link href={backHref} className="block rounded-xl bg-[#1f4e79] py-4 text-center text-lg font-semibold text-white">
+            <Link href={backHref} className="block rounded-control bg-brand py-4 text-center text-lg font-semibold text-ink-inverse">
               {t.e.back}
             </Link>
           </div>

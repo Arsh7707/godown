@@ -26,11 +26,11 @@ export default async function DispatchPage({ params }: PageProps<"/dispatches/[i
   return (
     <>
       <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/dispatches" title={d.partyName} />
-      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-4">
-        <div className="space-y-2 rounded-2xl bg-white p-4 shadow-sm">
+      <main className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
+        <div className="space-y-2 rounded-card bg-surface p-4 shadow-card">
           <div className="flex justify-between">
             <span className="font-semibold">🚚 {fmtDate(d.dispatchDate)}</span>
-            {d.status === "cancelled" && <span className="font-semibold text-red-700">{t.d.cancelled}</span>}
+            {d.status === "cancelled" && <span className="font-semibold text-danger">{t.d.cancelled}</span>}
           </div>
           {d.lines.map((l, i) => (
             <div key={i} className="flex justify-between text-lg">
@@ -40,15 +40,15 @@ export default async function DispatchPage({ params }: PageProps<"/dispatches/[i
               </span>
             </div>
           ))}
-          <p className="text-sm text-stone-600">{[d.takenBy && `${t.e.takenBy}: ${d.takenBy}`, d.transport && `${t.e.transport}: ${d.transport}`, d.lrNumber && `LR ${d.lrNumber}`].filter(Boolean).join(" · ")}</p>
-          {d.notes && <p className="rounded-lg bg-stone-50 p-2 text-sm">📝 {d.notes}</p>}
+          <p className="text-sm text-ink-muted">{[d.takenBy && `${t.e.takenBy}: ${d.takenBy}`, d.transport && `${t.e.transport}: ${d.transport}`, d.lrNumber && `LR ${d.lrNumber}`].filter(Boolean).join(" · ")}</p>
+          {d.notes && <p className="rounded-lg bg-sunken p-2 text-sm">📝 {d.notes}</p>}
         </div>
 
         {d.status === "active" && (
           <div className="space-y-2">
-            <h2 className="font-semibold text-stone-600">{t.d.countedAgainst}</h2>
+            <h2 className="font-semibold text-ink-muted">{t.d.countedAgainst}</h2>
             {d.goesTo.map((g, i) => (
-              <Link key={i} href={`/orders/${g.orderId}`} className="flex justify-between rounded-xl bg-white p-3 shadow-sm">
+              <Link key={i} href={`/orders/${g.orderId}`} className="flex justify-between rounded-control bg-surface p-3 shadow-card">
                 <span>
                   {t.d.orderOf} {fmtDate(g.orderDate)}
                 </span>
@@ -58,7 +58,7 @@ export default async function DispatchPage({ params }: PageProps<"/dispatches/[i
               </Link>
             ))}
             {d.unmatched > 0 && (
-              <p className="rounded-xl bg-amber-50 p-3 text-amber-900">
+              <p className="rounded-control bg-status-pending-bg p-3 text-status-pending">
                 {formatQty(d.unmatched)} {t.d.unmatched}
               </p>
             )}
@@ -67,19 +67,19 @@ export default async function DispatchPage({ params }: PageProps<"/dispatches/[i
 
         {d.canChange && (
           <div className="flex flex-wrap items-start gap-2">
-            <Link href={`/dispatches/${id}/edit?back=/dispatches/${id}`} className="rounded-xl border-2 border-stone-300 px-5 py-3 font-semibold">
+            <Link href={`/dispatches/${id}/edit?back=/dispatches/${id}`} className="rounded-control border-2 border-line-strong px-5 py-3 font-semibold">
               {t.e.edit}
             </Link>
             <CancelButton t={t} url={`/api/dispatches/${id}/cancel`} baseRev={d.rev} label={t.o.cancelDispatch} confirmText={t.o.cancelDispatchConfirm} />
           </div>
         )}
 
-        <h2 className="font-semibold text-stone-600">{t.d.history}</h2>
-        <ol className="space-y-1 text-sm text-stone-600">
+        <h2 className="font-semibold text-ink-muted">{t.d.history}</h2>
+        <ol className="space-y-1 text-sm text-ink-muted">
           {d.history.map((h) => (
             <li key={h.rev}>
               {h.rev === 1 ? t.d.created : h.status === "cancelled" ? t.d.cancelled : t.d.corrected} · {h.by} · {fmtTime(h.at)}
-              {h.reason && <span className="text-stone-500"> · “{h.reason}”</span>}
+              {h.reason && <span className="text-ink-subtle"> · “{h.reason}”</span>}
             </li>
           ))}
         </ol>

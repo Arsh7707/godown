@@ -42,3 +42,15 @@ test("screenshots of the order entry steps", async ({ page }) => {
   }
   await setLanguage(page, "en");
 });
+
+test("screenshots of login", async ({ browser }) => {
+  test.skip(!/login/.test(MATCH ?? ""), "SHOTS=login");
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 740 }, storageState: { cookies: [], origins: [] } });
+  const page = await ctx.newPage();
+  for (const lang of ["en", "hi"] as const) {
+    await ctx.addCookies([{ name: "ob_lang", value: lang, url: page.url().startsWith("http") ? page.url() : "http://localhost:3100" }]);
+    await page.goto("/login", { waitUntil: "networkidle" });
+    await page.screenshot({ path: `test-results/shots/login-${lang}.png` });
+  }
+  await ctx.close();
+});

@@ -55,14 +55,14 @@ export default async function Home() {
                 <span className="text-xl font-semibold">{t.ui.home.openOrders}</span>
               </p>
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <span className={`flex items-center gap-2 rounded-control px-3 py-2 ${overdue ? "bg-status-overdue-bg text-status-overdue" : "bg-white/15"}`}>
+                <span className={`flex items-center gap-2 rounded-control px-3 py-2 ${overdue ? "bg-status-overdue-bg text-status-overdue" : "bg-surface/15"}`}>
                   <Icon name={overdue ? "alert" : "checkCircle"} size={20} />
                   <span>
                     <span className="num block text-xl leading-tight font-bold">{overdue}</span>
                     <span className="block text-sm">{t.ui.home.overdue}</span>
                   </span>
                 </span>
-                <span className="flex items-center gap-2 rounded-control bg-white/15 px-3 py-2">
+                <span className="flex items-center gap-2 rounded-control bg-surface/15 px-3 py-2">
                   <Icon name="users" size={20} />
                   <span>
                     <span className="num block text-xl leading-tight font-bold">{parties}</span>
