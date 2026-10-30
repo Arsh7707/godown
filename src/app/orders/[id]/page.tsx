@@ -1,17 +1,21 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/db/client";
 import { isUuid } from "@/lib/ids";
 import { ctxFor, requireUser } from "@/auth/session";
 import { orderDetail } from "@/ledger/queries";
 import { LedgerError } from "@/lib/errors";
 import { formatQty } from "@/lib/qty";
+import { formatDay, formatDateTimeIST } from "@/lib/dates";
 import { messages } from "@/i18n/messages";
 import { AppHeader } from "@/components/app-header";
 import { CancelButton, OrderActions } from "@/components/order-actions";
-import Link from "next/link";
-
-const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-const fmtTime = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+import { LeftHero, SentBar } from "@/components/order-bits";
+import { Card, SectionTitle } from "@/components/ui/card";
+import { ActionBar, Page, Qty } from "@/components/ui/screen";
+import { ButtonLink } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icons";
+import { orderStatus, StatusBadge } from "@/components/ui/status";
 
 export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
   const { id } = await params;
@@ -23,86 +27,133 @@ export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
     throw e;
   });
   const via = { photo: t.p.viaPhoto, voice: t.p.viaVoice, text: t.p.viaText, form: t.p.viaForm }[o.inputMethod];
+  const status = orderStatus({ cancelled: o.status === "cancelled", overdue: o.overdue, lines: o.lines });
+  const canDispatch = user.role !== "viewer" && o.status === "open" && o.lines.some((l) => l.balance > 0);
+  const dotColor = { dispatch: "bg-go", cancelled: "bg-danger", created: "bg-brand", corrected: "bg-status-pending" };
 
   return (
     <>
-      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back={`/pending/party/${o.party.id}`} title={o.party.name} />
-      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-4">
-        <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
-          <div className="flex justify-between">
-            <span className="font-semibold">
-              {t.p.order} · {fmtDate(o.orderDate)}
-            </span>
-            <span className={o.status === "cancelled" ? "text-stone-500" : o.overdue ? "font-semibold text-red-700" : "text-[#2e7d4f]"}>
-              {o.status === "cancelled" ? t.p.statusCancelled : o.overdue ? `⚠ ${t.p.overdue}` : t.p.statusOpen}
-            </span>
-          </div>
-          <table className="w-full">
-            <thead className="text-sm text-stone-500">
-              <tr>
-                <th className="text-left font-normal" />
-                <th className="text-right font-normal">{t.p.ordered}</th>
-                <th className="text-right font-normal">{t.p.sent}</th>
-                <th className="text-right font-normal">{t.p.balance}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {o.lines.map((l, i) => (
-                <tr key={i}>
-                  <td className="py-1">{l.itemName}</td>
-                  <td className="text-right tabular-nums">{formatQty(l.ordered)}</td>
-                  <td className="text-right tabular-nums">{formatQty(l.sent)}</td>
-                  <td className="text-right font-bold tabular-nums">
-                    {formatQty(l.balance)} <span className="text-sm font-normal text-stone-500">{l.unit}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {o.promisedDate && (
-            <p className="text-sm text-stone-600">
-              {t.p.promised}: {fmtDate(o.promisedDate)}
-            </p>
-          )}
-          {o.notes && <p className="rounded-lg bg-stone-50 p-2 text-sm">📝 {o.notes}</p>}
-        </div>
+      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/orders" title={o.party.name} />
+      <Page>
+        {/* Hero: what is still to send */}
+        <Card className="space-y-4 p-5">
+          <StatusBadge t={t} status={status} />
+          <LeftHero t={t} lines={o.lines} status={status} size="hero" />
+          {status !== "cancelled" && <SentBar lines={o.lines} status={status} label={t.p.sent} />}
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-ink-subtle">{t.ui.orders.orderedOn}</dt>
+            <dd className="text-right font-semibold">
+              {formatDay(o.orderDate, { year: true })}
+              {status !== "fulfilled" && status !== "cancelled" && o.daysOld > 0 ? ` · ${o.daysOld} ${t.p.days}` : ""}
+            </dd>
+            {o.promisedDate && (
+              <>
+                <dt className="text-ink-subtle">{t.p.promised}</dt>
+                <dd className={`text-right font-semibold ${o.overdue ? "text-status-overdue" : ""}`}>{formatDay(o.promisedDate, { year: true })}</dd>
+              </>
+            )}
+          </dl>
+        </Card>
 
-        <OrderActions t={t} orderId={o.orderId} rev={o.rev} canChange={o.canChange} canDispatch={user.role !== "viewer" && o.status === "open" && o.lines.some((l) => l.balance > 0)} />
-
-        <h2 className="font-semibold text-stone-600">{t.p.timeline}</h2>
-        <ol className="space-y-3 border-l-2 border-stone-200 pl-4">
-          {o.events.map((e, i) => (
-            <li key={i} className="relative">
-              <span className={`absolute -left-[1.4rem] top-1.5 size-3 rounded-full ${e.kind === "dispatch" ? "bg-[#2e7d4f]" : e.kind === "cancelled" ? "bg-red-600" : "bg-[#1f4e79]"}`} />
-              <p className="font-medium">
-                {e.kind === "dispatch" && `🚚 ${t.p.dispatched} ${e.itemName} ${formatQty(e.quantity!)} ${e.unit}`}
-                {e.kind === "created" && `${t.p.created} (${via})`}
-                {e.kind === "corrected" && t.p.corrected}
-                {e.kind === "cancelled" && t.p.cancelledEvt}
-              </p>
-              {e.kind === "dispatch" && (
-                <p className="text-sm text-stone-600">
-                  {fmtDate(e.date!)}
-                  {[e.takenBy, e.transport, e.lrNumber && `LR ${e.lrNumber}`].filter(Boolean).map((x) => ` · ${x}`)}
-                </p>
-              )}
-              {e.text && <p className="text-sm text-stone-600">“{e.text}”</p>}
-              {e.kind === "dispatch" && e.canChange && e.dispatchId && (
-                <div className="mt-1.5 flex flex-wrap items-start gap-2">
-                  <Link href={`/dispatches/${e.dispatchId}/edit?back=/orders/${o.orderId}`} className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-semibold">
-                    {t.o.editDispatch}
-                  </Link>
-                  <CancelButton t={t} url={`/api/dispatches/${e.dispatchId}/cancel`} baseRev={e.dispatchRev!} label={t.o.cancelDispatch} confirmText={t.o.cancelDispatchConfirm} />
+        {/* Lines */}
+        <SectionTitle>{t.ui.orders.line}</SectionTitle>
+        <Card className="divide-y divide-line">
+          {o.lines.map((l) => {
+            const live = l.ordered - l.cancelled;
+            return (
+              <div key={l.orderLineId} className="space-y-2 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 flex-1 text-base font-semibold break-words">{l.itemName}</p>
+                  {l.balance > 0 ? (
+                    <span className="text-right">
+                      <Qty n={formatQty(l.balance)} unit={l.unit} className="text-xl font-bold" />
+                      <span className="block text-xs text-ink-subtle">{t.ui.leftShort}</span>
+                    </span>
+                  ) : (
+                    o.status !== "cancelled" && (
+                      <span className="flex items-center gap-1 text-sm font-semibold text-status-fulfilled">
+                        <Icon name="check" size={18} />
+                        {t.ui.status.fulfilled}
+                      </span>
+                    )
+                  )}
                 </div>
-              )}
-              <p className="text-xs text-stone-400">
-                {t.p.by} {e.by} · {fmtTime(e.at)}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </main>
+                <p className="text-sm text-ink-muted">
+                  {t.ui.sentOf} <span className="num font-semibold">{formatQty(l.sent)}</span> {t.ui.of} <span className="num font-semibold">{formatQty(live)}</span> {l.unit}
+                  {l.cancelled > 0 && (
+                    <span className="text-ink-subtle">
+                      {" "}
+                      · {t.p.cancelled} {formatQty(l.cancelled)}
+                    </span>
+                  )}
+                </p>
+              </div>
+            );
+          })}
+        </Card>
+
+        {o.notes && (
+          <Card className="flex gap-3 p-4">
+            <Icon name="note" size={22} className="text-ink-subtle" />
+            <p className="min-w-0 flex-1 break-words">{o.notes}</p>
+          </Card>
+        )}
+
+        <OrderActions t={t} orderId={o.orderId} rev={o.rev} canChange={o.canChange} />
+
+        <SectionTitle>{t.p.timeline}</SectionTitle>
+        <Card className="p-4">
+          <ol className="space-y-5">
+            {o.events.map((e, i) => (
+              <li key={i} className="relative flex gap-3">
+                <span className={`mt-2 size-3 shrink-0 rounded-full ${dotColor[e.kind]}`} aria-hidden />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="font-semibold break-words">
+                    {e.kind === "dispatch" && (
+                      <>
+                        {t.p.dispatched} {e.itemName} <Qty n={formatQty(e.quantity!)} unit={e.unit} />
+                      </>
+                    )}
+                    {e.kind === "created" && `${t.p.created} (${via})`}
+                    {e.kind === "corrected" && t.p.corrected}
+                    {e.kind === "cancelled" && t.p.cancelledEvt}
+                  </p>
+                  {e.kind === "dispatch" && (
+                    <p className="text-sm text-ink-muted">
+                      {[formatDay(e.date!, { year: true }), e.takenBy, e.transport, e.lrNumber && `LR ${e.lrNumber}`].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                  {e.text && <p className="text-sm text-ink-muted">“{e.text}”</p>}
+                  <p className="text-xs text-ink-subtle">
+                    {t.p.by} {e.by} · {formatDateTimeIST(e.at)}
+                  </p>
+                  {e.kind === "dispatch" && e.canChange && e.dispatchId && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <ButtonLink href={`/dispatches/${e.dispatchId}/edit?back=/orders/${o.orderId}`} variant="secondary" size="md" icon="edit">
+                        {t.o.editDispatch}
+                      </ButtonLink>
+                      <CancelButton t={t} url={`/api/dispatches/${e.dispatchId}/cancel`} baseRev={e.dispatchRev!} label={t.o.cancelDispatch} confirmText={t.o.cancelDispatchConfirm} />
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Card>
+
+        <Link href={`/pending/party/${o.party.id}`} className="flex min-h-12 items-center justify-center gap-1 font-semibold text-brand underline">
+          {t.ui.orders.seeParty}
+          <Icon name="chevron" size={18} />
+        </Link>
+
+        {canDispatch && (
+          <ActionBar>
+            <ButtonLink href={`/dispatch/new?order=${o.orderId}`} variant="go" size="lg" block icon="truck">
+              {t.dispatch}
+            </ButtonLink>
+          </ActionBar>
+        )}
+      </Page>
     </>
   );
 }
-
