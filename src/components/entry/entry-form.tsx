@@ -376,7 +376,7 @@ export function EntryForm({
           variant={shortfalls.length && overStockOk ? "destructive" : "go"}
           size="lg"
           disabled={busy}
-          className={`flex-1 ${complete ? "" : "opacity-80"}`}
+          className="flex-1"
           icon={kind === "dispatch" ? "truck" : "check"}
           onClick={async () => {
             if (!complete) {

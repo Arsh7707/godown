@@ -26,3 +26,19 @@ test("screenshots", async ({ page, seed }) => {
     await setLanguage(page, "en");
   }
 });
+
+test("screenshots of the order entry steps", async ({ page }) => {
+  test.skip(!/entry/.test(MATCH ?? ""), "SHOTS=entry");
+  for (const lang of ["en", "hi"] as const) {
+    await setLanguage(page, lang);
+    await page.goto("/order/new", { waitUntil: "networkidle" });
+    await page.screenshot({ path: `test-results/shots/entry-1-capture-${lang}.png`, fullPage: true });
+    await page.getByRole("button", { name: lang === "en" ? /Type/ : /टाइप/ }).click();
+    await page.screenshot({ path: `test-results/shots/entry-2-typing-${lang}.png`, fullPage: true });
+    await page.getByRole("button", { name: lang === "en" ? "Fill the form instead" : /फ़ॉर्म/ }).click();
+    await page.getByRole("button").filter({ hasText: lang === "en" ? "Save" : "सेव" }).click();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `test-results/shots/entry-3-form-missing-${lang}.png` });
+  }
+  await setLanguage(page, "en");
+});
