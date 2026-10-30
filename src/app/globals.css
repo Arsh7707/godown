@@ -1,29 +1,184 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f6f5f2;
-  --foreground: #1c1b19;
-  color-scheme: light;
+/*
+ * Godown design tokens: the one place colours, type, spacing, corners and
+ * shadows are defined. Components use the Tailwind names these create
+ * (bg-surface, text-ink-muted, text-status-overdue, rounded-card, shadow-card…).
+ *
+ * Contrast: every text colour here is at least 4.5:1 on both `surface` (white)
+ * and `canvas`. Status colours always come with an icon and a word (see
+ * components/ui/status.tsx), never colour alone.
+ */
+@theme {
+  /* Brand */
+  --color-brand: #1f4e79;
+  --color-brand-strong: #173b5c;
+  --color-brand-soft: #e6eef6;
+  --color-go: #24734a; /* dispatch / confirm actions */
+  --color-go-strong: #1b5a39;
+  --color-go-soft: #e5f3ea;
+  --color-danger: #b42318;
+  --color-danger-strong: #8f1b12;
+  --color-danger-soft: #fdecea;
+  --color-whatsapp: #128c4a;
+
+  /* Surfaces and lines */
+  --color-canvas: #f4f3ef;
+  --color-surface: #ffffff;
+  --color-sunken: #ecebe6;
+  --color-line: #e2e0da;
+  --color-line-strong: #c9c6be;
+
+  /* Text */
+  --color-ink: #1c1b19;
+  --color-ink-muted: #4f4a44; /* 8.4:1 on white */
+  --color-ink-subtle: #625c55; /* 6.4:1 on white, 5.8:1 on canvas */
+  --color-ink-inverse: #ffffff;
+  --color-focus: #2563eb;
+
+  /* Order / line status. `fg` text on `bg` is ≥ 4.5:1. */
+  --color-status-pending: #8a4600;
+  --color-status-pending-bg: #fff1dc;
+  --color-status-partial: #1d4f91;
+  --color-status-partial-bg: #e5eefa;
+  --color-status-fulfilled: #1b6a3d;
+  --color-status-fulfilled-bg: #e3f3e8;
+  --color-status-overdue: #a8201a;
+  --color-status-overdue-bg: #fdebe9;
+  --color-status-cancelled: #57524c;
+  --color-status-cancelled-bg: #ecebe7;
+
+  /* Type scale. 16px is the smallest body size; xs is for badges and timestamps only.
+     Line heights stay ≥ 1.5 for body text so Devanagari matras never clip. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", "Noto Sans Devanagari", "Kohinoor Devanagari", "Noto Sans Gurmukhi", sans-serif;
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.55;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.45;
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 1.4;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 1.3;
+  --text-hero: 2.75rem;
+  --text-hero--line-height: 1.15;
+
+  /* Spacing: Tailwind's 4px unit; screens use the 8pt steps (2, 4, 6, 8, 12…). */
+  --spacing: 0.25rem;
+
+  /* Corners */
+  --radius-control: 0.75rem; /* buttons, inputs */
+  --radius-card: 1rem;
+  --radius-sheet: 1.5rem;
+
+  /* Shadows */
+  --shadow-card: 0 1px 2px rgb(28 27 25 / 0.06), 0 1px 3px rgb(28 27 25 / 0.04);
+  --shadow-raised: 0 4px 12px rgb(28 27 25 / 0.1), 0 1px 3px rgb(28 27 25 / 0.06);
+  --shadow-bar: 0 -1px 0 rgb(28 27 25 / 0.06), 0 -4px 16px rgb(28 27 25 / 0.06);
+  --shadow-sheet: 0 -8px 32px rgb(28 27 25 / 0.18);
+
+  /* Fixed chrome */
+  --tabbar-height: 4.25rem;
+  --touch: 3rem; /* 48px minimum touch target */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: system-ui, "Noto Sans", "Noto Sans Devanagari", "Noto Sans Gurmukhi", sans-serif;
+:root {
+  color-scheme: light;
+  /* Space the bottom tab bar takes (0 on screens without it); sticky action bars sit above it. */
+  --tabbar-space: 0px;
+}
+body:has([data-tabbar]) {
+  --tabbar-space: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+}
+
+html {
+  /* Focused fields scroll clear of the sticky bars, never under them. */
+  scroll-padding-top: 5rem;
+  scroll-padding-bottom: calc(var(--tabbar-space) + 7rem);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-canvas);
+  color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.55;
   -webkit-tap-highlight-color: transparent;
+  /* No rubber-band pull revealing the browser behind the app. */
+  overscroll-behavior-y: none;
 }
 
-/* Large, comfortable touch targets everywhere */
+/* Hindi: a little more room above and below for matras and conjuncts. */
+:lang(hi) h1,
+:lang(hi) h2,
+:lang(hi) h3 {
+  line-height: 1.45;
+}
+
 button,
 a,
 input,
 select,
-textarea {
+textarea,
+label {
   touch-action: manipulation;
+}
+
+button,
+[role="button"],
+nav a {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+/* One focus ring everywhere, only for keyboard users. */
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 0;
+}
+
+/* Numbers line up in columns and never jump while counting. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(1rem);
+    opacity: 0;
+  }
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

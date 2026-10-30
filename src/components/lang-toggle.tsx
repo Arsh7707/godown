@@ -2,22 +2,24 @@
 
 import type { Lang } from "@/i18n/messages";
 
-/** हिं / EN switch. */
+/** हिं / EN switch: two 48px-tall halves. */
 export function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => void }) {
-  const btn = (l: Lang, label: string) => (
+  const btn = (l: Lang, label: string, name: string) => (
     <button
       type="button"
       onClick={() => onChange(l)}
       aria-pressed={lang === l}
-      className={`min-w-12 rounded-lg px-3 py-2 text-sm font-semibold ${lang === l ? "bg-[#1f4e79] text-white" : "text-stone-600"}`}
+      aria-label={name}
+      lang={l}
+      className={`min-h-12 min-w-12 rounded-[0.6rem] px-2 text-sm font-bold ${lang === l ? "bg-brand text-ink-inverse" : "text-ink-muted"}`}
     >
       {label}
     </button>
   );
   return (
-    <div className="flex rounded-xl border border-stone-300 bg-white p-0.5">
-      {btn("hi", "हिं")}
-      {btn("en", "EN")}
+    <div className="flex shrink-0 rounded-control border border-line bg-surface p-0.5">
+      {btn("hi", "हिं", "हिंदी")}
+      {btn("en", "EN", "EN")}
     </div>
   );
 }
