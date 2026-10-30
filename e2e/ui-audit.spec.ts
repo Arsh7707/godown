@@ -16,7 +16,7 @@ test.use({ viewport: { width: 360, height: 740 } });
 /** While working on one screen: `AUDIT_ONLY=orders npx playwright test ui-audit`. */
 const ONLY = process.env.AUDIT_ONLY ? new RegExp(process.env.AUDIT_ONLY) : null;
 /** Screens already moved to the new design; the rest join as they are redesigned. */
-const DONE = [/^\/orders/, /^\/dispatch\/new/];
+const DONE = [/^\/orders/, /^\/dispatch\/new/, /^\/pending/];
 
 type Problem = { rule: string; what: string };
 

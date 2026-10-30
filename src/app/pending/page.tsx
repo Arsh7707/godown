@@ -11,7 +11,7 @@ export default async function PendingPage() {
   const data = await pendingOverview(db, ctxFor(user));
   return (
     <>
-      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/" title={t.p.title} />
+      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} title={t.p.title} />
       <PendingView lang={user.language} parties={data.parties} items={data.items} canDispatch={user.role !== "viewer"} />
     </>
   );

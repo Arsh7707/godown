@@ -74,7 +74,7 @@ export function OrderRow({
           {showParty && <p className="text-lg leading-snug font-bold break-words">{o.partyName}</p>}
           <p className={`break-words text-ink-muted ${showParty ? "text-sm" : "text-base font-semibold"}`}>{names.slice(0, 3).join(", ") + (names.length > 3 ? ` +${names.length - 3}` : "")}</p>
           <p className="text-sm text-ink-subtle">
-            {formatDay(o.orderDate, { year: true })}
+            {formatDay(o.orderDate)}
             {!done && o.daysOld > 0 ? ` · ${o.daysOld} ${t.p.days}` : ""}
           </p>
         </div>
