@@ -6,7 +6,7 @@ import type { Db } from "@/db/types";
 import { companies, otpChallenges, sessions, users } from "@/db/schema";
 import { normalizePhone } from "@/lib/phone";
 import { hmac, hmacEquals, newOtpCode, newToken } from "./crypto";
-import type { OtpProvider } from "./otp-provider";
+import { OtpSendError, type OtpProvider } from "./otp-provider";
 
 export const OTP_TTL_MS = 10 * 60_000;
 export const MAX_SENDS_PER_HOUR = 5;
@@ -21,7 +21,9 @@ export type LoginError =
   | "CODE_EXPIRED"
   | "CODE_WRONG"
   | "TOO_MANY_ATTEMPTS"
-  | "CHOOSE_COMPANY";
+  | "CHOOSE_COMPANY"
+  | "NOT_ON_WHATSAPP"
+  | "SEND_FAILED";
 
 export class LoginFailure extends Error {
   constructor(
@@ -34,7 +36,7 @@ export class LoginFailure extends Error {
 
 async function activeMemberships(db: Db, phone: string) {
   return db
-    .select({ userId: users.id, companyId: users.companyId, companyName: companies.name, name: users.name, role: users.role })
+    .select({ userId: users.id, companyId: users.companyId, companyName: companies.name, name: users.name, role: users.role, language: users.language })
     .from(users)
     .innerJoin(companies, eq(companies.id, users.companyId))
     .where(and(eq(users.phone, phone), eq(users.active, true)));
@@ -52,7 +54,8 @@ export async function requestCode(
   if (opts.requiredAccessCode?.trim() && !same(input.accessCode, opts.requiredAccessCode)) throw new LoginFailure("ACCESS_CODE");
   const phone = normalizePhone(input.phone);
   if (!phone) throw new LoginFailure("INVALID_PHONE");
-  if (!(await activeMemberships(db, phone)).length) throw new LoginFailure("NOT_REGISTERED");
+  const memberships = await activeMemberships(db, phone);
+  if (!memberships.length) throw new LoginFailure("NOT_REGISTERED");
 
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -61,9 +64,21 @@ export async function requestCode(
   if (n >= MAX_SENDS_PER_HOUR) throw new LoginFailure("TOO_MANY_REQUESTS");
 
   const code = newOtpCode();
-  await db.insert(otpChallenges).values({ phone, codeHash: hmac(`${phone}:${code}`), expiresAt: new Date(now.getTime() + OTP_TTL_MS), createdAt: now });
-  const { showCode } = await provider.send(phone, code);
-  return { phone, showCode };
+  const [challenge] = await db
+    .insert(otpChallenges)
+    .values({ phone, codeHash: hmac(`${phone}:${code}`), expiresAt: new Date(now.getTime() + OTP_TTL_MS), createdAt: now })
+    .returning({ id: otpChallenges.id });
+  try {
+    const { showCode } = await provider.send(phone, code, { language: memberships[0].language });
+    return { phone, showCode, channel: provider.channel };
+  } catch (e) {
+    if (!(e instanceof OtpSendError)) throw e;
+    // Not sent: it doesn't count toward the hourly limit, and the person is told why.
+    await db.delete(otpChallenges).where(eq(otpChallenges.id, challenge.id));
+    if (e.reason === "setup") console.error(`[login] WhatsApp setup problem: ${e.message}`);
+    else console.warn(`[login] WhatsApp code not sent (${e.reason}): ${e.message}`);
+    throw new LoginFailure(e.reason === "notOnWhatsApp" ? "NOT_ON_WHATSAPP" : "SEND_FAILED");
+  }
 }
 
 /** Checks the code and opens a session. Returns the raw session token for the cookie. */
