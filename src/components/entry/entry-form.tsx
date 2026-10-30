@@ -361,6 +361,7 @@ export function EntryForm({
       {/* Save bar: sticky at the bottom but part of the page, so it never covers the last field.
           Save is always tappable: if something is still missing it points to it instead of silently doing nothing. */}
       <ActionBar
+        keepWithKeyboard
         above={
           (showMissing && missing.length > 0) || (overStockOk && shortfalls.length > 0) ? (
             <p role="alert" className="text-sm font-semibold text-danger">

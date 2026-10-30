@@ -95,6 +95,14 @@
 body:has([data-tabbar]) {
   --tabbar-space: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
 }
+/* Keyboard up (a text box has focus): the tab bar and list-screen action bars step aside. */
+html[data-keyboard] body:has([data-tabbar]) {
+  --tabbar-space: 0px;
+}
+html[data-keyboard] [data-tabbar],
+html[data-keyboard] [data-hide-with-keyboard] {
+  display: none;
+}
 
 html {
   /* Focused fields scroll clear of the sticky bars, never under them. */

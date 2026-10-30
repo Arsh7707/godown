@@ -13,9 +13,9 @@ export function Page({ children, className = "", wide = false }: { children: Rea
  * (above the tab bar when it shows). It sits in the page flow (sticky), so
  * it can never cover the last field: the page ends above it.
  */
-export function ActionBar({ children, above }: { children: ReactNode; above?: ReactNode }) {
+export function ActionBar({ children, above, keepWithKeyboard = false }: { children: ReactNode; above?: ReactNode; /** Forms keep Save visible while typing; list screens hide their button. */ keepWithKeyboard?: boolean }) {
   return (
-    <div className="sticky z-30 -mx-4 mt-6 border-t border-line bg-canvas/95 px-4 pt-3 pb-3 backdrop-blur-md" style={{ bottom: "var(--tabbar-space)" }}>
+    <div data-hide-with-keyboard={keepWithKeyboard ? undefined : ""} className="sticky z-30 -mx-4 mt-6 border-t border-line bg-canvas/95 px-4 pt-3 pb-3 backdrop-blur-md" style={{ bottom: "var(--tabbar-space)" }}>
       {above && <div className="mb-2">{above}</div>}
       <div className="flex gap-3">{children}</div>
       {/* Without a tab bar below, keep clear of the home indicator. */}

@@ -129,3 +129,24 @@ test.describe("sticky Save bar", () => {
     expect(last.y + last.height).toBeLessThanOrEqual(b.y + 1);
   });
 });
+
+test.describe("typing in a search box", () => {
+  test.use({ storageState: stateFile("owner") });
+
+  test("hides the tab bar and the bottom button, and the Search key brings them back", async ({ page }) => {
+    await page.goto("/orders", { waitUntil: "networkidle" });
+    const tabs = page.getByRole("navigation", { name: "Main" });
+    const newOrder = page.getByRole("link", { name: "New Order" });
+    await expect(tabs).toBeVisible();
+    await expect(newOrder).toBeVisible();
+    const search = page.getByRole("searchbox");
+    await search.click();
+    await search.fill("Sharma");
+    await expect(tabs).toBeHidden();
+    await expect(newOrder).toBeHidden();
+    await search.press("Enter");
+    await expect(search).not.toBeFocused();
+    await expect(tabs).toBeVisible();
+    await expect(page.getByText("Sharma Textiles").first()).toBeVisible();
+  });
+});

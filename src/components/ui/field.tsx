@@ -26,13 +26,23 @@ export function TextArea({ invalid, className = "", ...rest }: { invalid?: boole
 }
 
 /** Search box with a magnifier, for the top of lists. */
-export function SearchInput({ className = "", ...rest }: ComponentProps<"input">) {
+export function SearchInput({ className = "", onKeyDown, ...rest }: ComponentProps<"input">) {
   return (
     <div className={`relative ${className}`}>
       <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-ink-subtle">
         <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm9 3-4-4" />
       </svg>
-      <input type="search" className={inputClass(false, "pl-11")} {...rest} />
+      <input
+        type="search"
+        enterKeyHint="search"
+        className={inputClass(false, "pl-11")}
+        // The keyboard's Search key closes the keyboard: results are already filtered as you type.
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          onKeyDown?.(e);
+        }}
+        {...rest}
+      />
     </div>
   );
 }

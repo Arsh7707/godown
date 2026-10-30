@@ -26,6 +26,11 @@ export function AppHeader({ companyName, userName, lang, back, title, menu }: { 
           <Link href={back} aria-label={t.ui.back} className="flex size-12 shrink-0 items-center justify-center rounded-control text-brand active:bg-brand-soft">
             <Icon name="back" size={28} strokeWidth={2.4} />
           </Link>
+        ) : menu ? (
+          // Menu at the top-left, apart from the name so neither is cramped.
+          <span className="mr-2 shrink-0">
+            <SideMenu lang={lang} companyName={companyName} userName={userName} info={menu} />
+          </span>
         ) : (
           <span className="w-2" aria-hidden />
         )}
@@ -37,7 +42,6 @@ export function AppHeader({ companyName, userName, lang, back, title, menu }: { 
           </p>
         </div>
         <LangToggle lang={lang} onChange={setLang} />
-        {menu && <SideMenu lang={lang} companyName={companyName} userName={userName} info={menu} />}
       </div>
     </header>
   );

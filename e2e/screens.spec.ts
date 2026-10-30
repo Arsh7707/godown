@@ -47,8 +47,12 @@ test("a screen for something that does not exist shows not found, not a crash", 
   const ctx = await browser.newContext({ storageState: stateFile("owner") });
   const page = await ctx.newPage();
   for (const path of ["/orders/00000000-0000-0000-0000-000000000000", "/dispatches/not-a-uuid", "/stock/item/00000000-0000-0000-0000-000000000000", "/manage/clients/abc"]) {
-    const res = await page.goto(path);
-    expect(res?.status(), path).toBe(404);
+    const res = await page.goto(path, { waitUntil: "networkidle" });
+    // Screens stream in (instant loading skeleton), so a missing record can arrive with status 200:
+    // what matters is that it says "not found" and offers the way home, never a server error.
+    expect(res?.status(), path).toBeLessThan(500);
+    await expect(page.getByText("Not found").first(), path).toBeVisible();
+    await expect(page.getByRole("link", { name: "Home" }).first(), path).toBeVisible();
   }
   await ctx.close();
 });
