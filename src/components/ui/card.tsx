@@ -14,7 +14,7 @@ export function Card({ className = "", children, ...rest }: ComponentProps<"div"
 /** Small heading above a group of cards or rows. */
 export function SectionTitle({ children, action, id }: { children: ReactNode; action?: ReactNode; id?: string }) {
   return (
-    <div className="flex min-h-10 items-end justify-between gap-3 px-1 pt-2">
+    <div className="flex min-h-10 items-center justify-between gap-3 px-1 pt-2">
       <h2 id={id} className="text-sm font-semibold text-ink-subtle">
         {children}
       </h2>
