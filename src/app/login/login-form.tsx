@@ -14,7 +14,8 @@ type Step = { kind: "phone" } | { kind: "code"; phone: string; devCode: string |
 
 async function post(url: string, body: unknown) {
   const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  return (await res.json()) as { ok: boolean; code?: string; [k: string]: unknown };
+  // A reply that isn't JSON (a crash or timeout page) is a server problem, not "no connection".
+  return (await res.json().catch(() => ({ ok: false, code: "UNKNOWN", status: res.status }))) as { ok: boolean; code?: string; [k: string]: unknown };
 }
 
 export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang; needsAccessCode: boolean }) {
@@ -28,7 +29,7 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const showError = (c?: string) => setError(t.err[c ?? "UNKNOWN"] ?? t.err.UNKNOWN);
+  const showError = (c?: string, status?: unknown) => setError(`${t.err[c ?? "UNKNOWN"] ?? t.err.UNKNOWN}${typeof status === "number" ? ` (${status})` : ""}`);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -45,7 +46,7 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
   const sendCode = () =>
     run(async () => {
       const r = await post("/api/auth/request", { phone, accessCode });
-      if (!r.ok) return showError(r.code);
+      if (!r.ok) return showError(r.code, r.status);
       setCode("");
       setStep({ kind: "code", phone: r.phone as string, devCode: (r.devCode as string | null) ?? null });
     });
@@ -60,7 +61,7 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
         return;
       }
       if (r.code === "CHOOSE_COMPANY") return setStep({ kind: "company", phone: p, code, companies: r.companies as { id: string; name: string }[] });
-      showError(r.code);
+      showError(r.code, r.status);
     });
 
   const field = inputClass(false, "text-xl");
