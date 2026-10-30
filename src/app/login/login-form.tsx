@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { messages, type Lang } from "@/i18n/messages";
 import { LangToggle } from "@/components/lang-toggle";
 
-type Step = { kind: "phone" } | { kind: "code"; phone: string; devCode: string | null } | { kind: "company"; phone: string; code: string; companies: { id: string; name: string }[] };
+type Step = { kind: "phone" } | { kind: "code"; phone: string; devCode: string | null; whatsapp: boolean } | { kind: "company"; phone: string; code: string; companies: { id: string; name: string }[] };
 
 async function post(url: string, body: unknown) {
   const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -42,7 +42,7 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
       const r = await post("/api/auth/request", { phone, accessCode });
       if (!r.ok) return showError(r.code);
       setCode("");
-      setStep({ kind: "code", phone: r.phone as string, devCode: (r.devCode as string | null) ?? null });
+      setStep({ kind: "code", phone: r.phone as string, devCode: (r.devCode as string | null) ?? null, whatsapp: r.channel === "whatsapp" });
     });
 
   const verify = (companyId?: string) =>
@@ -88,8 +88,9 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
       {step.kind === "code" && (
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); verify(); }}>
           <p className="text-stone-600">
-            {t.codeSentTo} <span className="font-semibold text-stone-900">{step.phone}</span>
+            {step.whatsapp ? t.codeSentWhatsApp : t.codeSentTo} <span className="font-semibold text-stone-900">{step.phone}</span>
           </p>
+          {step.whatsapp && <p className="text-sm text-stone-500">{t.whatsappNoCode}</p>}
           {step.devCode && (
             <p className="rounded-xl bg-amber-50 p-3 text-amber-900">
               {t.devCodeNote} <span className="font-mono text-2xl font-bold tracking-widest">{step.devCode}</span>
