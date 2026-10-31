@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   // Browser tests build into their own folder so they never clash with `next dev`.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // Almost every screen is per-user live data, so plain dynamic rendering is simpler than Cache Components.
+  experimental: {
+    // Screens already opened show again instantly from the phone's memory. They can't go
+    // stale: KeepFresh reloads them as soon as anything is saved.
+    staleTimes: { dynamic: 300 },
+  },
   turbopack: {
     rules: {
       "*.css": {

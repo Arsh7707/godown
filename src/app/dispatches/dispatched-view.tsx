@@ -27,21 +27,21 @@ export function DispatchedView({ lang, list, showingCancelled }: { lang: Lang; l
   }
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-4">
-      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.d.search} className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg outline-none focus:border-[#1f4e79]" />
-      <Link href={showingCancelled ? "/dispatches" : "/dispatches?all=1"} className="block text-right text-sm text-stone-500 underline">
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
+      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.d.search} className="w-full rounded-control border border-line-strong bg-surface px-4 py-3 text-lg outline-none focus:border-brand" />
+      <Link href={showingCancelled ? "/dispatches" : "/dispatches?all=1"} className="ml-auto flex min-h-12 w-fit items-center text-sm font-semibold text-brand underline">
         {showingCancelled ? "✓ " : ""}
         {t.d.showCancelled}
       </Link>
-      {groups.length === 0 && <p className="py-16 text-center text-stone-500">{t.d.none}</p>}
+      {groups.length === 0 && <p className="py-16 text-center text-ink-subtle">{t.d.none}</p>}
       {groups.map(([date, ds]) => (
         <section key={date} className="space-y-2">
-          <h2 className="text-sm font-semibold text-stone-500">{fmtDate(date)}</h2>
+          <h2 className="text-sm font-semibold text-ink-subtle">{fmtDate(date)}</h2>
           {ds.map((d) => (
-            <Link key={d.dispatchId} href={`/dispatches/${d.dispatchId}`} className={`block space-y-1.5 rounded-2xl bg-white p-4 shadow-sm active:bg-stone-50 ${d.status === "cancelled" ? "opacity-50" : ""}`}>
+            <Link key={d.dispatchId} href={`/dispatches/${d.dispatchId}`} className={`block space-y-1.5 rounded-card bg-surface p-4 shadow-card active:bg-sunken ${d.status === "cancelled" ? "opacity-50" : ""}`}>
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-lg font-bold">{d.partyName}</p>
-                {d.status === "cancelled" && <span className="text-sm font-semibold text-red-700">{t.d.cancelled}</span>}
+                {d.status === "cancelled" && <span className="text-sm font-semibold text-danger">{t.d.cancelled}</span>}
               </div>
               {d.lines.map((l, i) => (
                 <div key={i} className="flex justify-between">
@@ -51,11 +51,11 @@ export function DispatchedView({ lang, list, showingCancelled }: { lang: Lang; l
                   </span>
                 </div>
               ))}
-              <p className="text-sm text-stone-500">
+              <p className="text-sm text-ink-subtle">
                 {[d.takenBy, d.transport, d.lrNumber && `LR ${d.lrNumber}`].filter(Boolean).join(" · ") || "—"}
               </p>
               {d.unmatched > 0 && (
-                <p className="text-sm text-amber-800">
+                <p className="text-sm text-status-pending">
                   {formatQty(d.unmatched)} {t.d.unmatched}
                 </p>
               )}

@@ -71,7 +71,7 @@ export function UpdateScreen(props: {
   if (step.s === "proposal") {
     const p = step.p;
     const banner = (
-      <div className="mb-5 space-y-2 rounded-2xl bg-sky-50 p-4 text-sky-950">
+      <div className="mb-5 space-y-2 rounded-card bg-brand-soft p-4 text-brand-strong">
         <p className="font-semibold">
           {t.o.understood}: {p.summary ?? ""}
         </p>
@@ -93,7 +93,7 @@ export function UpdateScreen(props: {
           {banner}
           <p className="mb-3 text-lg">{t.o.willCancel}</p>
           <CancelButton t={t} url={`/api/orders/${props.orderId}/cancel`} baseRev={step.rev} label={t.o.cancelOrder} confirmText={t.o.cancelOrderConfirm} />
-          <Link href={back} className="mt-4 block text-center text-[#1f4e79]">
+          <Link href={back} className="mt-4 block text-center text-brand">
             {t.e.back}
           </Link>
         </Shell>
@@ -136,31 +136,31 @@ export function UpdateScreen(props: {
   const recording = state === "recording";
   return (
     <Shell title={`${t.o.updateTitle}: ${props.partyName}`} back={back} t={t}>
-      <div className="mb-4 rounded-2xl bg-white p-4 text-stone-700 shadow-sm">
+      <div className="mb-4 rounded-card bg-surface p-4 text-ink-muted shadow-card">
         {props.lines.map((l, i) => (
           <p key={i}>{l}</p>
         ))}
       </div>
-      {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-amber-900">{error}</p>}
+      {error && <p className="mb-4 rounded-control bg-status-pending-bg p-3 text-status-pending">{error}</p>}
       {step.s === "busy" ? (
-        <div className="flex flex-col items-center gap-4 py-16 text-stone-600" aria-live="polite">
-          <div className="size-12 animate-spin rounded-full border-4 border-stone-200 border-t-[#1f4e79]" />
+        <div className="flex flex-col items-center gap-4 py-16 text-ink-muted" aria-live="polite">
+          <div className="size-12 animate-spin rounded-full border-4 border-line border-t-brand" />
           <p className="text-lg">{t.e.reading}</p>
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-stone-600">{t.o.updateHint}</p>
+          <p className="text-ink-muted">{t.o.updateHint}</p>
           <button
-            className={`flex w-full select-none items-center justify-center gap-3 rounded-2xl py-8 text-2xl font-bold text-white shadow-sm ${recording ? "bg-red-600" : "bg-[#2e7d4f]"}`}
+            className={`flex w-full select-none items-center justify-center gap-3 rounded-card py-8 text-2xl font-bold text-ink-inverse shadow-card ${recording ? "bg-danger" : "bg-go"}`}
             onClick={toggle}
           aria-pressed={recording}
           >
             🎤 {recording ? `${Math.floor(elapsed)}s · ${t.e.releaseToSend}` : t.e.holdToRecord}
           </button>
-          {state === "tooShort" && <p className="text-center text-stone-600">{t.e.holdLonger}</p>}
-          {state === "blocked" && <p className="rounded-xl bg-red-50 p-3 text-red-800">{t.e.micBlocked}</p>}
-          <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={t.e.type} className="w-full rounded-2xl border border-stone-300 bg-white p-4 text-lg outline-none focus:border-[#1f4e79]" />
-          <button disabled={!text.trim()} onClick={() => interpret({ text: text.trim() })} className="w-full rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white disabled:opacity-40">
+          {state === "tooShort" && <p className="text-center text-ink-muted">{t.e.holdLonger}</p>}
+          {state === "blocked" && <p className="rounded-control bg-danger-soft p-3 text-danger">{t.e.micBlocked}</p>}
+          <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={t.e.type} className="w-full rounded-card border border-line-strong bg-surface p-4 text-lg outline-none focus:border-brand" />
+          <button disabled={!text.trim()} onClick={() => interpret({ text: text.trim() })} className="w-full rounded-control bg-brand py-4 text-lg font-semibold text-ink-inverse disabled:opacity-40">
             {t.e.readIt}
           </button>
         </div>
@@ -172,15 +172,15 @@ export function UpdateScreen(props: {
 function Shell({ title, back, t, children }: { title: string; back: string; t: ReturnType<typeof messages>; children: React.ReactNode }) {
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center gap-2">
-          <Link href={back} className="-ml-2 rounded-lg px-2 py-1 text-3xl leading-none text-[#1f4e79]" aria-label={t.e.back}>
+      <header className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur">
+        <div className="mx-auto flex max-w-lg items-center gap-2">
+          <Link href={back} className="-ml-2 rounded-lg px-2 py-1 text-3xl leading-none text-brand" aria-label={t.e.back}>
             ‹
           </Link>
-          <h1 className="truncate text-xl font-bold text-[#1f4e79]">{title}</h1>
+          <h1 className="break-words text-xl font-bold text-brand">{title}</h1>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-md flex-1 px-4 py-5">{children}</main>
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">{children}</main>
     </>
   );
 }

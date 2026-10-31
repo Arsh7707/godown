@@ -24,6 +24,9 @@ function firmChanged(res: Response, quiet: boolean) {
   window.location.reload();
 }
 
+/** Fired after the server accepts something, so open screens check for changes right away. */
+export const SAVED_EVENT = "godown:saved";
+
 /** `firm`: send for this firm instead of the screen's (the outbox sends each entry for the firm it was made in). */
 export async function postJson<T>(url: string, body: unknown, opts: { firm?: string | null } = {}): Promise<ApiResult<T>> {
   let res: Response;
@@ -39,13 +42,15 @@ export async function postJson<T>(url: string, body: unknown, opts: { firm?: str
     window.location.href = "/login";
     throw new NetworkError("unauthenticated");
   }
-  return (await res.json().catch(() => ({ ok: false, code: "UNKNOWN" }))) as ApiResult<T>;
+  const r = (await res.json().catch(() => ({ ok: false, code: "UNKNOWN" }))) as ApiResult<T>;
+  if (r.ok) window.dispatchEvent(new Event(SAVED_EVENT));
+  return r;
 }
 
 export async function getJson<T>(url: string): Promise<ApiResult<T>> {
   let res: Response;
   try {
-    res = await fetch(url, { headers: firmHeaders(undefined) });
+    res = await fetch(url, { headers: firmHeaders(undefined), cache: "no-store" });
   } catch {
     throw new NetworkError("offline");
   }

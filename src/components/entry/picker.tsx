@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { similarity, type Candidate } from "@/extraction/matcher";
 import type { Messages } from "@/i18n/messages";
+import { Icon } from "../ui/icons";
+import { inputClass } from "../ui/field";
 
 interface Option {
   id: string;
@@ -55,46 +57,49 @@ export function Picker({
     return [...direct, ...close];
   }, [q, options]);
   const exact = options.some((o) => norm(o.name) === norm(q));
-  const row = "flex w-full items-center justify-between gap-3 border-b border-stone-100 px-4 py-4 text-left text-lg active:bg-stone-100";
+  const row = "flex min-h-14 w-full items-center justify-between gap-3 border-b border-line px-4 py-3 text-left text-lg active:bg-sunken";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white" role="dialog" aria-label={title}>
-      <div className="flex items-center gap-2 border-b border-stone-200 p-3 pt-[max(.75rem,env(safe-area-inset-top))]">
-        <button onClick={onClose} className="rounded-lg px-3 py-2 text-[#1f4e79]">
-          {t.e.cancel}
-        </button>
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.e.search} className="min-w-0 flex-1 rounded-xl border border-stone-300 px-4 py-3 text-lg outline-none focus:border-[#1f4e79]" />
+    <div className="fixed inset-0 z-50 flex flex-col bg-surface [animation:sheet-up_.2s_cubic-bezier(.2,.8,.2,1)]" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="border-b border-line bg-canvas px-3 pt-[max(.5rem,env(safe-area-inset-top))] pb-3">
+        <div className="flex min-h-12 items-center gap-2">
+          <button type="button" onClick={onClose} className="min-h-12 rounded-control px-3 font-semibold text-brand active:bg-brand-soft">
+            {t.e.cancel}
+          </button>
+          <h2 className="min-w-0 flex-1 text-lg font-bold break-words">{title}</h2>
+        </div>
+        <input autoFocus aria-label={t.e.search} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.e.search} className={inputClass(false, "mt-2")} />
       </div>
       <div className="flex-1 overflow-y-auto">
         {!q && suggested.length > 0 && (
           <>
-            <p className="bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900">{t.e.suggested}</p>
+            <p className="bg-status-pending-bg px-4 py-2 text-sm font-semibold text-status-pending">{t.e.suggested}</p>
             {suggested.map((c) => (
               <button key={`s-${c.id}`} className={row} onClick={() => onPick(c.id)}>
                 <span>{c.name}</span>
-                <span className="text-sm text-stone-400">{Math.round(c.score * 100)}%</span>
+                <span className="text-sm text-ink-subtle">{Math.round(c.score * 100)}%</span>
               </button>
             ))}
-            <p className="bg-stone-50 px-4 py-2 text-sm font-semibold text-stone-500">{t.e.allNames}</p>
+            <p className="bg-sunken px-4 py-2 text-sm font-semibold text-ink-subtle">{t.e.allNames}</p>
           </>
         )}
         {list.map((o) => (
           <button key={o.id} className={row} onClick={() => onPick(o.id)}>
             <span>{o.name}</span>
-            {o.sub && <span className="text-sm text-stone-400">{o.sub}</span>}
+            {o.sub && <span className="text-sm text-ink-subtle">{o.sub}</span>}
           </button>
         ))}
         {onCreate && q.trim() && !exact && (
           <div className="space-y-3 p-4">
             {askUnit && (
               <label className="block space-y-1">
-                <span className="text-sm text-stone-600">{t.e.newUnit}</span>
-                <input value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full rounded-xl border border-stone-300 px-4 py-3 text-lg" />
+                <span className="text-sm font-semibold text-ink-muted">{t.e.newUnit}</span>
+                <input value={unit} onChange={(e) => setUnit(e.target.value)} className={inputClass()} />
               </label>
             )}
             <button
               disabled={busy}
-              className="w-full rounded-xl border-2 border-dashed border-[#1f4e79] px-4 py-4 text-lg font-semibold text-[#1f4e79] disabled:opacity-50"
+              className="flex min-h-14 w-full items-center justify-center gap-2 rounded-control border-2 border-dashed border-brand px-4 py-3 text-lg font-semibold text-brand disabled:opacity-50"
               onClick={async () => {
                 setBusy(true);
                 try {
@@ -104,7 +109,8 @@ export function Picker({
                 }
               }}
             >
-              + {t.e.addNew}: “{q.trim()}”
+              <Icon name="plus" size={22} />
+              {t.e.addNew}: “{q.trim()}”
             </button>
           </div>
         )}

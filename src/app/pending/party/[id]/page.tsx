@@ -5,12 +5,16 @@ import { isUuid } from "@/lib/ids";
 import { ctxFor, requireUser } from "@/auth/session";
 import { partyOrders } from "@/ledger/queries";
 import { LedgerError } from "@/lib/errors";
-import { formatQty } from "@/lib/qty";
 import { messages } from "@/i18n/messages";
 import { AppHeader } from "@/components/app-header";
+import { OrderRow } from "@/components/order-bits";
+import { Card, SectionTitle } from "@/components/ui/card";
+import { ActionBar, Page } from "@/components/ui/screen";
+import { ButtonLink } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/feedback";
+import { Icon } from "@/components/ui/icons";
 
-const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-
+/** One party: its open orders (what is left on each), then the ones already done. */
 export default async function PartyPendingPage({ params }: PageProps<"/pending/party/[id]">) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
@@ -20,70 +24,56 @@ export default async function PartyPendingPage({ params }: PageProps<"/pending/p
     if (e instanceof LedgerError && e.code === "NOT_FOUND") notFound();
     throw e;
   });
-  const card = (o: (typeof data.open)[number], done: boolean) => (
-    <div key={o.orderId} className={`overflow-hidden rounded-2xl bg-white shadow-sm ${done ? "opacity-70" : ""}`}>
-    <Link href={`/orders/${o.orderId}`} className="block space-y-2 p-4">
-      <div className="flex justify-between text-sm">
-        <span className="font-semibold">
-          {t.p.order} · {fmtDate(o.orderDate)}
-        </span>
-        <span className={o.overdue ? "font-semibold text-red-700" : "text-stone-500"}>
-          {o.overdue && `⚠ ${t.p.overdue} · `}
-          {o.daysOld} {t.p.days}
-        </span>
-      </div>
-      {o.lines.map((l, i) => (
-        <div key={i} className="flex justify-between gap-3">
-          <span>{l.itemName}</span>
-          <span className="tabular-nums text-stone-600">
-            {formatQty(l.sent)}/{formatQty(l.ordered)} · <b className="text-stone-900">{formatQty(l.balance)}</b> {l.unit}
-            {l.cancelled > 0 && <span className="text-stone-400"> ({t.p.cancelled} {formatQty(l.cancelled)})</span>}
-          </span>
-        </div>
-      ))}
-      {o.promisedDate && (
-        <p className="text-sm text-stone-500">
-          {t.p.promised}: {fmtDate(o.promisedDate)}
-        </p>
-      )}
-    </Link>
-    {!done && user.role !== "viewer" && (
-      <Link href={`/dispatch/new?order=${o.orderId}`} className="block border-t border-stone-100 bg-emerald-50 py-3 text-center font-semibold text-[#2e7d4f]">
-        🚚 {t.dispatch}
-      </Link>
-    )}
-    </div>
-  );
+  const row = (o: (typeof data.open)[number]) => <OrderRow t={t} showParty={false} o={{ ...o, cancelled: o.status === "cancelled" }} />;
   return (
     <>
       <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/pending" title={data.party.name} />
-      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 py-4">
+      <Page>
         {(data.party.city || data.party.state || data.party.taxId) && (
-          <div className="flex items-start justify-between gap-3 rounded-2xl bg-white p-4 text-sm text-stone-600 shadow-sm">
-            <div className="space-y-0.5">
-              {(data.party.city || data.party.state) && <p>📍 {[data.party.city, data.party.state].filter(Boolean).join(", ")}</p>}
+          <Card className="flex items-start gap-3 p-4 text-sm text-ink-muted">
+            <div className="min-w-0 flex-1 space-y-1">
+              {(data.party.city || data.party.state) && <p className="break-words">{[data.party.city, data.party.state].filter(Boolean).join(", ")}</p>}
               {data.party.taxId && (
-                <p className="font-mono">
+                <p className="font-mono break-all">
                   {data.party.taxIdType === "gstin" ? t.m.gstin : t.m.aadhaar}: {data.party.taxId}
                 </p>
               )}
             </div>
             {user.role === "owner" && (
-              <Link href={`/manage/clients/${data.party.id}`} className="shrink-0 font-semibold text-[#1f4e79] underline">
-                ✏️
+              <Link href={`/manage/clients/${data.party.id}`} aria-label={t.e.edit} className="-m-2 flex size-12 shrink-0 items-center justify-center rounded-control text-brand active:bg-brand-soft">
+                <Icon name="edit" size={22} />
               </Link>
             )}
-          </div>
+          </Card>
         )}
-        <h2 className="font-semibold text-stone-600">{t.p.openOrders}</h2>
-        {data.open.length ? data.open.map((o) => card(o, false)) : <p className="text-stone-500">{t.p.nothingPending}</p>}
+        <SectionTitle>{t.p.openOrders}</SectionTitle>
+        {data.open.length ? (
+          <ul className="space-y-3">
+            {data.open.map((o) => (
+              <li key={o.orderId}>{row(o)}</li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState icon="checkCircle" title={t.p.nothingPending} />
+        )}
         {data.closed.length > 0 && (
           <>
-            <h2 className="pt-3 font-semibold text-stone-600">{t.p.completed}</h2>
-            {data.closed.slice(0, 20).map((o) => card(o, true))}
+            <SectionTitle>{t.p.completed}</SectionTitle>
+            <ul className="space-y-3">
+              {data.closed.slice(0, 20).map((o) => (
+                <li key={o.orderId}>{row(o)}</li>
+              ))}
+            </ul>
           </>
         )}
-      </main>
+        {data.open.length > 0 && user.role !== "viewer" && (
+          <ActionBar>
+            <ButtonLink href={`/dispatch/new?party=${data.party.id}`} variant="go" size="lg" block icon="truck">
+              {t.dispatch}
+            </ButtonLink>
+          </ActionBar>
+        )}
+      </Page>
     </>
   );
 }

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { messages, type Lang } from "@/i18n/messages";
 import { ReminderSettings } from "./reminder-settings";
 import { switchFirm } from "@/client/firm";
+import { Icon, type IconName } from "./ui/icons";
 
 export interface MenuInfo {
   role: "owner" | "staff" | "viewer";
@@ -63,7 +64,7 @@ export function SideMenu({
     title: string;
     links: {
       href: string;
-      icon: string;
+      icon: IconName;
       label: string;
       badge?: number;
       show?: boolean;
@@ -72,43 +73,43 @@ export function SideMenu({
     {
       title: t.menu.work,
       links: [
-        { href: "/", icon: "🏠", label: t.menu.home },
-        { href: "/order/new", icon: "📝", label: t.newOrder, show: canEnter },
+        { href: "/", icon: "home", label: t.menu.home },
+        { href: "/order/new", icon: "orders", label: t.newOrder, show: canEnter },
         {
           href: "/dispatch/new",
-          icon: "🚚",
+          icon: "truck",
           label: t.dispatch,
           show: canEnter,
         },
-        { href: "/pending", icon: "📋", label: t.pending },
-        { href: "/stock/in", icon: "📦", label: t.s.goodsIn, show: canEnter },
-        { href: "/inbox", icon: "📥", label: t.inbox.title, show: canEnter },
+        { href: "/pending", icon: "pending", label: t.pending },
+        { href: "/stock/in", icon: "box", label: t.s.goodsIn, show: canEnter },
+        { href: "/inbox", icon: "inbox", label: t.inbox.title, show: canEnter },
       ],
     },
     {
       title: t.menu.records,
       links: [
-        { href: "/dispatches", icon: "🚛", label: t.d.title },
-        { href: "/stock", icon: "📦", label: t.s.title, badge: info.lowCount },
-        { href: "/history", icon: "📅", label: t.h.title },
-        { href: "/unmatched", icon: "❓", label: t.u.menu, badge: info.unmatchedCount },
-        { href: "/reports", icon: "📈", label: t.r.menu, show: info.role !== "staff" },
+        { href: "/dispatches", icon: "truck", label: t.d.title },
+        { href: "/stock", icon: "stock", label: t.s.title, badge: info.lowCount },
+        { href: "/history", icon: "history", label: t.h.title },
+        { href: "/unmatched", icon: "question", label: t.u.menu, badge: info.unmatchedCount },
+        { href: "/reports", icon: "chart", label: t.r.menu, show: info.role !== "staff" },
       ],
     },
     {
       title: t.m.title,
       links: [
-        { href: "/manage/clients", icon: "👥", label: t.m.clients },
-        { href: "/manage/items", icon: "🏷️", label: t.m.items },
-        { href: "/manage/team", icon: "🧑‍🤝‍🧑", label: t.m.team },
-        { href: "/manage/company", icon: "🏢", label: t.m.company },
-        { href: "/manage/import", icon: "📊", label: t.imp.menu },
-        { href: "/activity", icon: "🕘", label: t.a.menu },
-      ].map((l) => ({ ...l, show: info.role === "owner" })),
+        { href: "/manage/clients", icon: "users", label: t.m.clients },
+        { href: "/manage/items", icon: "tag", label: t.m.items },
+        { href: "/manage/team", icon: "user", label: t.m.team },
+        { href: "/manage/company", icon: "building", label: t.m.company },
+        { href: "/manage/import", icon: "download", label: t.imp.menu },
+        { href: "/activity", icon: "history", label: t.a.menu },
+      ].map((l) => ({ ...l, icon: l.icon as IconName, show: info.role === "owner" })),
     },
     {
       title: t.f.title,
-      links: [{ href: "/firms", icon: "🏭", label: otherFirms.length ? t.f.allFirms : t.f.title }],
+      links: [{ href: "/firms", icon: "swap", label: otherFirms.length ? t.f.allFirms : t.f.title }],
     },
   ];
   const roleLabel = {
@@ -119,25 +120,8 @@ export function SideMenu({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={t.menu.open}
-        aria-expanded={open}
-        className="-ml-2 rounded-lg p-2 text-[#1f4e79] active:bg-stone-100"
-      >
-        <svg
-          width="26"
-          height="26"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          aria-hidden
-        >
-          <path d="M4 7h16M4 12h16M4 17h16" />
-        </svg>
+      <button type="button" onClick={() => setOpen(true)} aria-label={t.menu.open} aria-expanded={open} className="flex size-12 shrink-0 items-center justify-center rounded-control text-brand active:bg-brand-soft">
+        <Icon name="menu" size={26} strokeWidth={2.2} />
       </button>
 
       {mounted &&
@@ -156,36 +140,36 @@ export function SideMenu({
               role="dialog"
               aria-modal="true"
               aria-label={t.menu.open}
-              className={`absolute inset-y-0 left-0 flex w-[84%] max-w-80 flex-col bg-stone-50 shadow-xl transition-transform duration-200 ease-out ${open ? "translate-x-0" : "-translate-x-full"}`}
+              className={`absolute inset-y-0 left-0 flex w-[84%] max-w-80 flex-col bg-canvas shadow-xl transition-transform duration-200 ease-out ${open ? "translate-x-0" : "-translate-x-full"}`}
             >
-              <div className="flex items-start justify-between gap-3 bg-[#1f4e79] px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-white">
+              <div className="flex items-start justify-between gap-3 bg-brand px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-ink-inverse">
                 <div className="min-w-0">
                   {otherFirms.length ? (
                     <button type="button" onClick={() => setFirmsOpen((v) => !v)} aria-expanded={firmsOpen} className="flex max-w-full items-center gap-2 text-left">
-                      <span className="truncate text-lg font-bold">{companyName}</span>
-                      <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">⇄ {t.f.switch}</span>
+                      <span className="break-words text-lg font-bold">{companyName}</span>
+                      <span className="shrink-0 rounded-full bg-surface/20 px-2 py-0.5 text-xs font-semibold">⇄ {t.f.switch}</span>
                     </button>
                   ) : (
-                    <p className="truncate text-lg font-bold">{companyName}</p>
+                    <p className="break-words text-lg font-bold">{companyName}</p>
                   )}
-                  <p className="truncate text-sm opacity-80">
+                  <p className="text-sm opacity-90">
                     {userName} · {roleLabel}
-                    {info.stockKeeper ? ` · 📦 ${t.m.stockKeeper}` : ""}
+                    {info.stockKeeper ? ` · ${t.m.stockKeeper}` : ""}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
                   aria-label={t.menu.close}
-                  className="-mr-2 rounded-lg px-3 py-1 text-2xl leading-none"
+                  className="-mr-2 flex size-12 shrink-0 items-center justify-center rounded-control"
                 >
-                  ×
+                  <Icon name="close" size={26} />
                 </button>
               </div>
 
               {firmsOpen && otherFirms.length > 0 && (
-                <div className="space-y-1 border-b border-stone-200 bg-white px-3 py-3">
-                  <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-stone-500">{t.f.switchTo}</p>
+                <div className="space-y-1 border-b border-line bg-surface px-3 py-3">
+                  <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">{t.f.switchTo}</p>
                   {otherFirms.map((f) => (
                     <button
                       key={f.companyId}
@@ -196,13 +180,11 @@ export function SideMenu({
                         const r = await switchFirm(f.companyId, "/").catch(() => null);
                         if (!r?.ok) setSwitching(null);
                       }}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-lg active:bg-stone-100 disabled:opacity-50"
+                      className="flex min-h-12 w-full items-center gap-3 rounded-control px-3 py-3 text-left text-lg active:bg-sunken disabled:opacity-50"
                     >
-                      <span className="w-7 text-center text-xl" aria-hidden>
-                        🏢
-                      </span>
-                      <span className="flex-1 truncate">{f.name}</span>
-                      {switching === f.companyId && <span className="text-sm text-stone-500">…</span>}
+                      <Icon name="building" size={22} className="text-ink-muted" />
+                      <span className="flex-1 break-words">{f.name}</span>
+                      {switching === f.companyId && <span className="text-sm text-ink-subtle">…</span>}
                     </button>
                   ))}
                 </div>
@@ -214,7 +196,7 @@ export function SideMenu({
                   if (!links.length) return null;
                   return (
                     <div key={sec.title}>
-                      <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                      <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
                         {sec.title}
                       </p>
                       {links.map((l) => {
@@ -228,17 +210,12 @@ export function SideMenu({
                             href={l.href}
                             onClick={() => setOpen(false)}
                             aria-current={active ? "page" : undefined}
-                            className={`flex items-center gap-3 rounded-xl px-3 py-3 text-lg ${active ? "bg-[#1f4e79]/10 font-semibold text-[#1f4e79]" : "text-stone-800 active:bg-stone-200"}`}
+                            className={`flex min-h-12 items-center gap-3 rounded-control px-3 py-2.5 text-lg ${active ? "bg-brand-soft font-semibold text-brand" : "text-ink active:bg-sunken"}`}
                           >
-                            <span
-                              className="w-7 text-center text-xl"
-                              aria-hidden
-                            >
-                              {l.icon}
-                            </span>
+                            <Icon name={l.icon} size={22} className={active ? "text-brand" : "text-ink-muted"} />
                             <span className="flex-1">{l.label}</span>
                             {!!l.badge && (
-                              <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+                              <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-bold text-ink-inverse">
                                 {l.badge}
                               </span>
                             )}
@@ -250,7 +227,7 @@ export function SideMenu({
                 })}
                 {(info.role === "owner" || info.stockKeeper) && (
                   <div>
-                    <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
                       {t.menu.settings}
                     </p>
                     <ReminderSettings t={t} owner={info.role === "owner"} />
@@ -265,9 +242,9 @@ export function SideMenu({
                   router.replace("/login");
                   router.refresh();
                 }}
-                className="border-t border-stone-200 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-left text-lg text-stone-600"
+                className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-left text-lg text-ink-muted"
               >
-                ↪ {t.logout}
+                <Icon name="logout" size={22} /> {t.logout}
               </button>
             </nav>
           </div>,

@@ -8,10 +8,13 @@ import { LedgerError } from "@/lib/errors";
 import { formatQty } from "@/lib/qty";
 import { messages } from "@/i18n/messages";
 import { AppHeader } from "@/components/app-header";
-import { LiveRefresh } from "@/components/live-refresh";
 import { ItemStockActions, UndoStockButton } from "./item-actions";
+import { formatDay } from "@/lib/dates";
+import { fill, words } from "@/lib/text";
+import { Card, SectionTitle } from "@/components/ui/card";
+import { Page } from "@/components/ui/screen";
+import { Notice } from "@/components/ui/feedback";
 
-const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 const signed = (c: number) => (c > 0 ? `+${formatQty(c)}` : c < 0 ? `−${formatQty(-c)}` : "0");
 
 export default async function ItemStockPage({ params }: PageProps<"/stock/item/[id]">) {
@@ -28,65 +31,75 @@ export default async function ItemStockPage({ params }: PageProps<"/stock/item/[
   return (
     <>
       <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/stock" title={item.name} />
-      <LiveRefresh />
-      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-4">
+      <Page>
         {unitRows.map((u) => (
-          <div key={u.unitCode ?? ""} className="space-y-1">
-            {unitRows.length > 1 && <p className="text-sm font-semibold text-stone-600">{u.unit}</p>}
-            <div className="grid grid-cols-3 gap-2 text-center">
-              {[
-                [t.s.inStock, u.inStock, u.inStock < 0 ? "text-red-700" : ""],
-                [t.s.owed, u.owed, "text-stone-600"],
-                [t.s.free, u.free, u.free < 0 ? "text-red-700" : u.low ? "text-amber-700" : "text-[#2e7d4f]"],
-              ].map(([l, v, cls]) => (
-                <div key={l as string} className="rounded-2xl bg-white p-3 shadow-sm">
-                  <p className="text-xs text-stone-500">{l as string}</p>
-                  <p className={`text-2xl font-bold tabular-nums ${cls}`}>{num(v as number)}</p>
-                  <p className="text-xs text-stone-400">{u.unit}</p>
+          <section key={u.unitCode ?? ""} className="space-y-2">
+            {unitRows.length > 1 && <SectionTitle>{u.unit}</SectionTitle>}
+            <Card className="p-5">
+              <p className="text-sm font-semibold text-ink-subtle">{t.s.free}</p>
+              <p className={`num text-hero font-bold ${u.free < 0 ? "text-status-overdue" : "text-ink"}`}>
+                {num(u.free)} <span className="text-xl font-normal text-ink-subtle">{u.unit}</span>
+              </p>
+              <p className="text-sm text-ink-subtle">{t.ui.stock.freeHelp}</p>
+              <dl className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-control bg-sunken p-3">
+                  <dt className="text-sm text-ink-subtle">{t.s.inStock}</dt>
+                  <dd className={`num text-2xl font-bold ${u.inStock < 0 ? "text-status-overdue" : ""}`}>{num(u.inStock)}</dd>
+                  <dd className="text-xs text-ink-subtle">{t.ui.stock.inStockHelp}</dd>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="rounded-control bg-sunken p-3">
+                  <dt className="text-sm text-ink-subtle">{t.s.owed}</dt>
+                  <dd className="num text-2xl font-bold">{num(u.owed)}</dd>
+                  <dd className="text-xs text-ink-subtle">{t.ui.stock.owedHelp}</dd>
+                </div>
+              </dl>
+            </Card>
+          </section>
         ))}
-        {item.inStock < 0 && <p className="rounded-xl bg-red-50 p-3 text-red-800">⚠ {t.s.negative}</p>}
+        {item.inStock < 0 && (
+          <Notice tone="error">
+            <p className="font-semibold">{fill(t.ui.stock.short, { n: words(formatQty(-item.inStock), item.unit) })}</p>
+            <p>{t.s.negative}</p>
+          </Notice>
+        )}
         {item.low && item.inStock >= 0 && (
-          <p className="rounded-xl bg-amber-50 p-3 text-amber-900">
-            ⚠ {t.s.low}: {t.s.free} {num(item.free)} ≤ {formatQty(item.lowLevel)}
-          </p>
+          <Notice tone="warn">
+            {t.s.low}: {t.s.free} {num(item.free)} ≤ {formatQty(item.lowLevel)}
+          </Notice>
         )}
 
         <ItemStockActions t={t} itemId={id} unit={unitRows.find((u) => u.unitCode === null)?.unit ?? item.unit} lowLevel={formatQty(item.lowLevel)} canEnter={user.role !== "viewer"} isOwner={user.role === "owner"} />
 
-        <h2 className="font-semibold text-stone-600">{t.s.history}</h2>
-        <ol className="space-y-2">
+        <SectionTitle>{t.s.history}</SectionTitle>
+        <Card className="divide-y divide-line">
           {events.map((e, i) => (
-            <li key={i} className={`flex items-start justify-between gap-3 rounded-xl bg-white p-3 shadow-sm ${e.reversed ? "opacity-50" : ""}`}>
-              <div className="min-w-0">
-                <p className="font-medium">
+            <div key={i} className={`flex items-start justify-between gap-3 p-4 ${e.reversed ? "opacity-60" : ""}`}>
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="font-semibold break-words">
                   {label[e.kind]}
                   {e.kind === "dispatch" && e.partyName && (
-                    <Link href={`/dispatches/${e.dispatchId}`} className="text-[#1f4e79]">
+                    <Link href={`/dispatches/${e.dispatchId}`} className="text-brand underline">
                       {" "}
                       → {e.partyName}
                     </Link>
                   )}
                   {e.kind === "count" && e.counted !== null && e.counted !== undefined && ` ${formatQty(e.counted)}`}
-                  {e.reversed && <span className="text-sm text-stone-500"> · {t.s.undone}</span>}
+                  {e.reversed && <span className="text-sm font-normal text-ink-subtle"> · {t.s.undone}</span>}
                 </p>
-                <p className="text-xs text-stone-500">
-                  {fmtDate(e.date)} · {e.by}
+                <p className="text-sm text-ink-subtle">
+                  {formatDay(e.date)} · {e.by}
                   {e.reason ? ` · “${e.reason}”` : ""}
                 </p>
                 {e.canReverse && e.batchId && <UndoStockButton t={t} batchId={e.batchId} />}
               </div>
-              <span className={`shrink-0 text-right text-lg font-bold tabular-nums ${e.change < 0 ? "text-red-700" : "text-[#2e7d4f]"}`}>
+              <span className={`num shrink-0 text-right text-lg font-bold ${e.change < 0 ? "text-status-overdue" : "text-status-fulfilled"}`}>
                 {signed(e.change)}
-                <span className="block text-xs font-normal text-stone-500">{e.unit}</span>
+                <span className="block text-xs font-normal text-ink-subtle">{e.unit}</span>
               </span>
-            </li>
+            </div>
           ))}
-        </ol>
-      </main>
+        </Card>
+      </Page>
     </>
   );
 }

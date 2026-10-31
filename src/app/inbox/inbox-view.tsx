@@ -28,7 +28,7 @@ export function InboxView({ lang }: { lang: Lang }) {
     if (i.state === "queued") status = t.inbox.sending;
     if (i.type === "capture" && i.state === "read")
       action = (
-        <Link href={link("resume")} className="rounded-xl bg-[#1f4e79] px-4 py-2.5 font-semibold text-white">
+        <Link href={link("resume")} className="rounded-control bg-brand px-4 py-2.5 font-semibold text-ink-inverse">
           {t.inbox.review}
         </Link>
       );
@@ -36,7 +36,7 @@ export function InboxView({ lang }: { lang: Lang }) {
       status = t.err[i.error ?? ""] ?? i.error ?? t.err.UNKNOWN;
       action =
         i.type === "save" ? (
-          <Link href={link("fix")} className="rounded-xl bg-amber-500 px-4 py-2.5 font-semibold text-white">
+          <Link href={link("fix")} className="rounded-control bg-status-pending px-4 py-2.5 font-semibold text-ink-inverse">
             {t.inbox.fix}
           </Link>
         ) : null;
@@ -45,14 +45,14 @@ export function InboxView({ lang }: { lang: Lang }) {
     if (elsewhere && i.state !== "done") {
       status = `🏢 ${i.firmName ?? "?"}: ${t.f.otherFirmEntry}`;
       action = (
-        <button onClick={() => switchFirm(i.firm!, "/inbox")} className="rounded-xl bg-[#1f4e79] px-4 py-2.5 font-semibold text-white">
+        <button onClick={() => switchFirm(i.firm!, "/inbox")} className="rounded-control bg-brand px-4 py-2.5 font-semibold text-ink-inverse">
           {t.f.switchTo}
         </button>
       );
     }
     return (
-      <div key={i.id} className="space-y-2 rounded-2xl bg-white p-4 shadow-sm">
-        <div className="flex justify-between text-xs uppercase tracking-wide text-stone-400">
+      <div key={i.id} className="space-y-2 rounded-card bg-surface p-4 shadow-card">
+        <div className="flex justify-between text-xs uppercase tracking-wide text-ink-subtle">
           <span>
             {kindLabel(i.kind)}
             {elsewhere && ` · 🏢 ${i.firmName ?? ""}`}
@@ -61,10 +61,10 @@ export function InboxView({ lang }: { lang: Lang }) {
         </div>
         <p className="text-lg">{what(i)}</p>
         <div className="flex items-center justify-between gap-3">
-          <span className={`text-sm ${i.state === "failed" ? "text-red-700" : "text-stone-500"}`}>{status}</span>
+          <span className={`text-sm ${i.state === "failed" ? "text-danger" : "text-ink-subtle"}`}>{status}</span>
           <div className="flex items-center gap-2">
             {(i.state === "failed" || (i.type === "save" && i.state === "done")) && (
-              <button onClick={() => remove(i.id)} className="px-2 py-2 text-sm text-stone-500">
+              <button onClick={() => remove(i.id)} className="px-2 py-2 text-sm text-ink-subtle">
                 {t.inbox.discard}
               </button>
             )}
@@ -72,7 +72,7 @@ export function InboxView({ lang }: { lang: Lang }) {
           </div>
         </div>
         {i.type === "save" && i.state === "done" && i.share && (
-          <a href={i.share.url} target="_blank" rel="noreferrer" className="block rounded-xl bg-[#25d366] py-3 text-center font-semibold text-white">
+          <a href={i.share.url} target="_blank" rel="noreferrer" className="block rounded-control bg-whatsapp py-3 text-center font-semibold text-ink-inverse">
             {t.e.share}
           </a>
         )}
@@ -81,9 +81,9 @@ export function InboxView({ lang }: { lang: Lang }) {
   };
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 py-4">
-      {!online && <p className="rounded-xl bg-stone-800 p-3 text-sm text-white">{t.offline}</p>}
-      {items.length ? [...items].reverse().map(row) : <p className="py-16 text-center text-stone-500">{t.inbox.empty}</p>}
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-3 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
+      {!online && <p className="rounded-control bg-ink p-3 text-sm text-ink-inverse">{t.offline}</p>}
+      {items.length ? [...items].reverse().map(row) : <p className="py-16 text-center text-ink-subtle">{t.inbox.empty}</p>}
     </main>
   );
 }

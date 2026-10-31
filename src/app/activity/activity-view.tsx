@@ -64,10 +64,10 @@ export function ActivityView({ lang, people, today }: { lang: Lang; people: { id
 
   const field = (f: string) => t.a.fields[f] ?? f;
   const val = (v: string) => (v === "true" ? t.a.yes : v === "false" ? t.a.no : (t.m[`role${v[0]?.toUpperCase()}${v.slice(1)}` as keyof typeof t.m] as string | undefined) ?? v);
-  const chip = (on: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${on ? "bg-[#1f4e79] text-white" : "bg-white text-stone-700 shadow-sm"}`;
+  const chip = (on: boolean) => `min-h-12 shrink-0 rounded-full px-4 text-base font-semibold whitespace-nowrap ${on ? "bg-brand text-ink-inverse" : "bg-surface text-ink-muted shadow-card"}`;
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 py-4">
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-3 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
         <button onClick={() => setGroup("")} className={chip(group === "")}>
           {t.a.all}
@@ -79,7 +79,7 @@ export function ActivityView({ lang, people, today }: { lang: Lang; people: { id
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <select value={userId} onChange={(e) => setUserId(e.target.value)} aria-label={t.a.person} className="col-span-3 rounded-xl border border-stone-300 bg-white px-3 py-2.5">
+        <select value={userId} onChange={(e) => setUserId(e.target.value)} aria-label={t.a.person} className="col-span-3 min-h-12 rounded-control border border-line-strong bg-surface px-3 py-2.5">
           <option value="">{t.a.everyone}</option>
           {people.map((p) => (
             <option key={p.id} value={p.id}>
@@ -88,14 +88,14 @@ export function ActivityView({ lang, people, today }: { lang: Lang; people: { id
             </option>
           ))}
         </select>
-        <label className="col-span-3 grid grid-cols-2 gap-2 text-xs text-stone-500">
+        <label className="col-span-3 grid grid-cols-2 gap-2 text-xs text-ink-subtle">
           <span className="space-y-1">
             {t.a.from}
-            <input type="date" value={from} max={to || today} onChange={(e) => setFrom(e.target.value)} className="w-full rounded-xl border border-stone-300 bg-white px-2 py-2 text-base text-stone-900" />
+            <input type="date" value={from} max={to || today} onChange={(e) => setFrom(e.target.value)} className="w-full rounded-control border border-line-strong bg-surface px-2 py-2 text-base text-ink" />
           </span>
           <span className="space-y-1">
             {t.a.to}
-            <input type="date" value={to} min={from || undefined} max={today} onChange={(e) => setTo(e.target.value)} className="w-full rounded-xl border border-stone-300 bg-white px-2 py-2 text-base text-stone-900" />
+            <input type="date" value={to} min={from || undefined} max={today} onChange={(e) => setTo(e.target.value)} className="w-full rounded-control border border-line-strong bg-surface px-2 py-2 text-base text-ink" />
           </span>
         </label>
         {(group || userId || from || to) && (
@@ -106,31 +106,31 @@ export function ActivityView({ lang, people, today }: { lang: Lang; people: { id
               setFrom("");
               setTo("");
             }}
-            className="col-span-3 text-left text-sm text-stone-500 underline"
+            className="col-span-3 text-left text-sm text-ink-subtle underline"
           >
             {t.a.clear}
           </button>
         )}
       </div>
 
-      {err && <p className="rounded-xl bg-red-50 p-3 text-red-800">{err}</p>}
-      {!busy && !entries.length && !err && <p className="py-12 text-center text-stone-500">{t.a.nothing}</p>}
+      {err && <p className="rounded-control bg-danger-soft p-3 text-danger">{err}</p>}
+      {!busy && !entries.length && !err && <p className="py-12 text-center text-ink-subtle">{t.a.nothing}</p>}
 
       {entries.map((e, idx) => {
         const day = istDay(e.at);
         const head = idx === 0 || istDay(entries[idx - 1].at) !== day;
         const kind = e.action.split(".")[0];
         const body = (
-          <div className="space-y-1 rounded-2xl bg-white p-3 shadow-sm">
+          <div className="space-y-1 rounded-card bg-surface p-3 shadow-card">
             <div className="flex items-start justify-between gap-2">
               <p className="min-w-0">
                 <span aria-hidden>{ICON[kind] ?? "•"} </span>
                 <b>{t.a.act[e.action] ?? e.action}</b>
                 {e.subject && <> · {e.subject}</>}
               </p>
-              <span className="shrink-0 text-xs text-stone-400">{istTime(e.at)}</span>
+              <span className="shrink-0 text-xs text-ink-subtle">{istTime(e.at)}</span>
             </div>
-            <p className="text-sm text-stone-500">
+            <p className="text-sm text-ink-subtle">
               {e.by}
               {e.forDate && e.forDate !== day && ` · ${t.a.forDate} ${dayTitle(e.forDate)}`}
             </p>
@@ -144,17 +144,17 @@ export function ActivityView({ lang, people, today }: { lang: Lang; people: { id
               <ul className="space-y-0.5 text-sm">
                 {e.changes.map((c, i) => (
                   <li key={i}>
-                    <span className="text-stone-500">{field(c.field)}:</span> {c.from !== null ? <s className="text-stone-400">{val(c.from)}</s> : <i className="text-stone-400">{t.a.empty}</i>} → {c.to !== null ? <b>{val(c.to)}</b> : <i className="text-stone-400">{t.a.removedValue}</i>}
+                    <span className="text-ink-subtle">{field(c.field)}:</span> {c.from !== null ? <s className="text-ink-subtle">{val(c.from)}</s> : <i className="text-ink-subtle">{t.a.empty}</i>} → {c.to !== null ? <b>{val(c.to)}</b> : <i className="text-ink-subtle">{t.a.removedValue}</i>}
                   </li>
                 ))}
               </ul>
             )}
-            {e.reason && <p className="text-sm italic text-stone-600">“{e.reason}”</p>}
+            {e.reason && <p className="text-sm italic text-ink-muted">“{e.reason}”</p>}
           </div>
         );
         return (
           <div key={e.id} className="space-y-2">
-            {head && <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-stone-500">{day === today ? t.p.today : dayTitle(day)}</p>}
+            {head && <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-ink-subtle">{day === today ? t.p.today : dayTitle(day)}</p>}
             {e.href ? (
               <Link href={e.href} className="block active:opacity-80">
                 {body}
@@ -165,9 +165,9 @@ export function ActivityView({ lang, people, today }: { lang: Lang; people: { id
           </div>
         );
       })}
-      {busy && <p className="py-4 text-center text-stone-400">…</p>}
+      {busy && <p className="py-4 text-center text-ink-subtle">…</p>}
       {more && !busy && (
-        <button onClick={() => load(entries[entries.length - 1])} className="w-full rounded-xl border-2 border-stone-300 py-3 font-semibold">
+        <button onClick={() => load(entries[entries.length - 1])} className="w-full rounded-control border-2 border-line-strong py-3 font-semibold">
           {t.a.older}
         </button>
       )}

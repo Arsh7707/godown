@@ -41,11 +41,11 @@ function range(p: Preset, today: string): { from: string; to: string } {
 }
 
 function Table({ head, rows, empty }: { head: string[]; rows: (string | number | React.ReactNode)[][]; empty: string }) {
-  if (!rows.length) return <p className="rounded-2xl bg-white p-6 text-center text-stone-500 shadow-sm">{empty}</p>;
+  if (!rows.length) return <p className="rounded-card bg-surface p-6 text-center text-ink-subtle shadow-card">{empty}</p>;
   return (
-    <div className="overflow-x-auto rounded-2xl bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-card bg-surface shadow-card">
       <table className="w-full text-left text-sm">
-        <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
+        <thead className="bg-sunken text-xs uppercase tracking-wide text-ink-subtle">
           <tr>
             {head.map((h, i) => (
               <th key={i} className={`px-3 py-2 ${i ? "text-right" : ""}`}>
@@ -56,7 +56,7 @@ function Table({ head, rows, empty }: { head: string[]; rows: (string | number |
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className="border-t border-stone-100 align-top">
+            <tr key={i} className="border-t border-line align-top">
               {r.map((c, j) => (
                 <td key={j} className={`px-3 py-2 ${j ? "text-right" : "font-medium"}`}>
                   {c}
@@ -126,16 +126,16 @@ export function ReportsView({ lang, today, firm }: { lang: Lang; today: string; 
     return () => clearTimeout(id);
   }, [from, to, slowDays, t]);
 
-  const chip = (on: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${on ? "bg-[#1f4e79] text-white" : "bg-white text-stone-700 shadow-sm"}`;
+  const chip = (on: boolean) => `min-h-12 shrink-0 rounded-full px-4 text-base font-semibold whitespace-nowrap ${on ? "bg-brand text-ink-inverse" : "bg-surface text-ink-muted shadow-card"}`;
   const tabBtn = (k: Tab, label: string) => (
-    <button onClick={() => setTab(k)} aria-pressed={tab === k} className={`flex-1 rounded-lg px-1 py-2 text-sm font-semibold ${tab === k ? "bg-white text-[#1f4e79] shadow-sm" : "text-stone-600"}`}>
+    <button onClick={() => setTab(k)} aria-pressed={tab === k} className={`min-h-12 flex-1 rounded-[0.6rem] px-1 py-2 text-base font-semibold ${tab === k ? "bg-surface text-brand shadow-card" : "text-ink-muted"}`}>
       {label}
     </button>
   );
   const r = report;
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 py-4">
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-3 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
         {(["today", "week", "month", "lastMonth", "30", "custom"] as Preset[]).map((p) => (
           <button key={p} onClick={() => setPreset(p)} className={chip(preset === p)}>
@@ -144,37 +144,37 @@ export function ReportsView({ lang, today, firm }: { lang: Lang; today: string; 
         ))}
       </div>
       {preset === "custom" && (
-        <div className="grid grid-cols-2 gap-2 text-xs text-stone-500">
+        <div className="grid grid-cols-2 gap-2 text-xs text-ink-subtle">
           <label className="space-y-1">
             {t.a.from}
-            <input type="date" value={custom.from} max={custom.to || today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))} className="w-full rounded-xl border border-stone-300 bg-white px-2 py-2 text-base text-stone-900" />
+            <input type="date" value={custom.from} max={custom.to || today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))} className="w-full rounded-control border border-line-strong bg-surface px-2 py-2 text-base text-ink" />
           </label>
           <label className="space-y-1">
             {t.a.to}
-            <input type="date" value={custom.to} min={custom.from} max={today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))} className="w-full rounded-xl border border-stone-300 bg-white px-2 py-2 text-base text-stone-900" />
+            <input type="date" value={custom.to} min={custom.from} max={today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))} className="w-full rounded-control border border-line-strong bg-surface px-2 py-2 text-base text-ink" />
           </label>
         </div>
       )}
-      <p className="text-sm text-stone-600">
+      <p className="text-sm text-ink-muted">
         {fmtDate(from)} → {fmtDate(r?.to ?? to)}
       </p>
 
-      <div className="flex rounded-xl bg-stone-200 p-1">
+      <div className="flex rounded-control bg-sunken p-1">
         {tabBtn("dispatched", t.r.tabs.dispatched)}
         {tabBtn("orders", t.r.tabs.orders)}
         {tabBtn("pending", t.r.tabs.pending)}
         {tabBtn("slow", t.r.tabs.slow)}
       </div>
 
-      {err && <p className="rounded-xl bg-red-50 p-3 text-red-800">{err}</p>}
-      {busy && !r && <p className="py-12 text-center text-stone-400">…</p>}
+      {err && <p className="rounded-control bg-danger-soft p-3 text-danger">{err}</p>}
+      {busy && !r && <p className="py-12 text-center text-ink-subtle">…</p>}
 
       {r && (
         <div className={`space-y-3 ${busy ? "opacity-60" : ""}`}>
           {tab === "dispatched" && (
             <>
-              <div className="rounded-2xl bg-[#2e7d4f] p-4 text-white">
-                <p className="text-sm opacity-80">
+              <div className="rounded-card bg-go p-4 text-ink-inverse">
+                <p className="text-sm">
                   {r.dispatched.dispatches} {t.r.dispatches}
                 </p>
                 <p className="text-2xl font-bold">{units(r.dispatched.total)}</p>
@@ -185,7 +185,7 @@ export function ReportsView({ lang, today, firm }: { lang: Lang; today: string; 
               <Table
                 head={[t.r.client, t.r.qty, t.r.dispatches]}
                 rows={r.dispatched.byParty.map((p) => [
-                  <Link key={p.partyId} href={`/pending/party/${p.partyId}`} className="text-[#1f4e79] underline">
+                  <Link key={p.partyId} href={`/pending/party/${p.partyId}`} className="text-brand underline">
                     {p.name}
                   </Link>,
                   units(p.qty),
@@ -200,12 +200,12 @@ export function ReportsView({ lang, today, firm }: { lang: Lang; today: string; 
 
           {tab === "orders" && (
             <>
-              <div className="rounded-2xl bg-[#1f4e79] p-4 text-white">
+              <div className="rounded-card bg-brand p-4 text-ink-inverse">
                 <p className="text-2xl font-bold">
                   {r.orders.orders} {t.r.orders}
                 </p>
                 {r.orders.cancelledOrders > 0 && (
-                  <p className="text-sm opacity-80">
+                  <p className="text-sm">
                     {r.orders.cancelledOrders} {t.r.cancelledOrders}
                   </p>
                 )}
@@ -228,12 +228,12 @@ export function ReportsView({ lang, today, firm }: { lang: Lang; today: string; 
 
           {tab === "pending" && (
             <>
-              <p className="text-sm text-stone-500">{t.r.pendingNote}</p>
+              <p className="text-sm text-ink-subtle">{t.r.pendingNote}</p>
               <h2 className="pt-1 font-semibold">{t.r.pendingByClient}</h2>
               <Table
                 head={[t.r.client, t.r.qty, t.r.oldest]}
                 rows={r.pending.byParty.map((p) => [
-                  <Link key={p.partyId} href={`/pending/party/${p.partyId}`} className={p.overdue ? "text-red-700 underline" : "text-[#1f4e79] underline"}>
+                  <Link key={p.partyId} href={`/pending/party/${p.partyId}`} className={p.overdue ? "text-danger underline" : "text-brand underline"}>
                     {p.overdue ? "⚠ " : ""}
                     {p.name}
                   </Link>,
@@ -249,9 +249,9 @@ export function ReportsView({ lang, today, firm }: { lang: Lang; today: string; 
 
           {tab === "slow" && (
             <>
-              <label className="flex items-center gap-2 text-sm text-stone-600">
+              <label className="flex items-center gap-2 text-sm text-ink-muted">
                 {t.r.slowFor}
-                <select value={slowDays} onChange={(e) => setSlowDays(Number(e.target.value))} className="rounded-lg border border-stone-300 bg-white px-2 py-1.5">
+                <select value={slowDays} onChange={(e) => setSlowDays(Number(e.target.value))} className="min-h-12 rounded-control border border-line-strong bg-surface px-2 py-1.5">
                   {[15, 30, 60, 90, 180].map((d) => (
                     <option key={d} value={d}>
                       {d} {t.p.days}
@@ -259,11 +259,11 @@ export function ReportsView({ lang, today, firm }: { lang: Lang; today: string; 
                   ))}
                 </select>
               </label>
-              <p className="text-sm text-stone-500">{t.r.slowNote}</p>
+              <p className="text-sm text-ink-subtle">{t.r.slowNote}</p>
               <Table
                 head={[t.r.item, t.r.inStock, t.r.lastSent]}
                 rows={r.slow.map((s) => [
-                  <Link key={`${s.itemId}${s.unit}`} href={`/stock/item/${s.itemId}`} className="text-[#1f4e79] underline">
+                  <Link key={`${s.itemId}${s.unit}`} href={`/stock/item/${s.itemId}`} className="text-brand underline">
                     {s.name}
                   </Link>,
                   `${formatQty(s.inStock)} ${s.unit}`,
@@ -274,7 +274,7 @@ export function ReportsView({ lang, today, firm }: { lang: Lang; today: string; 
             </>
           )}
 
-          <button onClick={() => exportReport(t, r, firm)} className="w-full rounded-xl border-2 border-stone-300 bg-white py-3 font-semibold">
+          <button onClick={() => exportReport(t, r, firm)} className="w-full rounded-control border-2 border-line-strong bg-surface py-3 font-semibold">
             ⬇️ {t.r.download}
           </button>
         </div>
