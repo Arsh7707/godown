@@ -12,6 +12,7 @@ Everything runs by itself: before every push, on GitHub for every push, and ever
 | API robustness (`e2e/api.spec.ts`) | No login, wrong role, wrong firm, garbage and random (fuzzed) bodies: always a clear 4xx, never a server error, nothing saved | CI (150 fuzz), nightly (2000) | part of `test:e2e` |
 | Accessibility (`e2e/accessibility.spec.ts`) | Every main screen: buttons and fields have names, nothing hidden is focusable, text contrast at least 4.5:1 | CI, nightly | part of `test:e2e` |
 | Design rules (`e2e/ui-audit.spec.ts`) | Every screen at 360px in English and Hindi: nothing wider than the phone, every tap target at least 48px, no text under 14px (body 16px), no cut-off or clipped text, no word glued to a number; the sticky Save bar never covers a field | CI, nightly | part of `test:e2e` |
+| Fast and fresh (`e2e/fresh.spec.ts`) | A tab opened before shows again without asking the server; something saved by someone else still reaches an open screen | CI, nightly | part of `test:e2e` |
 | Live site (`smoke/`) | Read-only: up, fast, locked, headers, PWA files. Never logs in | after every deploy, nightly | `npm run test:live-smoke` |
 | Test strength (mutation) | Plants thousands of small bugs in the calculation code; the score is how many the tests catch | weekly | `npm run test:mutation` |
 

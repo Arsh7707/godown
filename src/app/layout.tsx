@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorker } from "@/components/service-worker";
 import { currentUser } from "@/auth/session";
+import { db } from "@/db/client";
+import { changeMark } from "@/ledger/changes";
+import { KeepFresh } from "@/components/keep-fresh";
 import { messages } from "@/i18n/messages";
 import { TabBar } from "@/components/ui/tab-bar";
 import { ToastProvider } from "@/components/ui/feedback";
@@ -28,6 +31,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const user = await currentUser();
   const t = user ? messages(user.language) : null;
+  const mark = user ? await changeMark(db, user) : null;
   return (
     <html lang={user?.language === "en" ? "en" : "hi"} className="h-full antialiased">
       <head>
@@ -39,6 +43,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <ToastProvider>
           {children}
           {t && <TabBar labels={{ ...t.ui.tabs, nav: t.ui.nav }} />}
+          {mark !== null && <KeepFresh mark={mark} />}
         </ToastProvider>
         <ServiceWorker />
       </body>

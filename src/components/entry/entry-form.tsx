@@ -63,6 +63,9 @@ export function EntryForm({
   onCancel: () => void;
 }) {
   const [f, setF] = useState<FormState>(initial);
+  // The version the person started editing: a background reload must not swap in a newer
+  // one, or their edit would overwrite someone else's change without the conflict check.
+  const [baseRev] = useState(mode.type === "create" ? null : mode.baseRev);
   const [picker, setPicker] = useState<{ kind: "party" } | { kind: "item"; key: string } | null>(null);
   // Results are tagged with the inputs they were fetched for and shown only while those still match.
   const [planFor, setPlanFor] = useState<{ key: string; plan: DispatchPlan; stock: Record<string, number> } | null>(null);
@@ -164,7 +167,7 @@ export function EntryForm({
     setBusy(true);
     setError(null);
     const url = mode.type === "correctOrder" ? `/api/orders/${mode.orderId}/correct` : mode.type === "correctDispatch" ? `/api/dispatches/${mode.dispatchId}/correct` : saveUrl(kind);
-    const sendBody = correcting ? { ...body, baseRev: mode.baseRev, reason: reason.trim() || null } : body;
+    const sendBody = correcting ? { ...body, baseRev, reason: reason.trim() || null } : body;
     try {
       const r = await postJson<{ share: Share }>(url, sendBody);
       if (r.ok) onSaved(r.share);

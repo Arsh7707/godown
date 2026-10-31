@@ -8,7 +8,6 @@ import { LedgerError } from "@/lib/errors";
 import { formatQty } from "@/lib/qty";
 import { messages } from "@/i18n/messages";
 import { AppHeader } from "@/components/app-header";
-import { LiveRefresh } from "@/components/live-refresh";
 import { ItemStockActions, UndoStockButton } from "./item-actions";
 import { formatDay } from "@/lib/dates";
 import { fill, words } from "@/lib/text";
@@ -32,7 +31,6 @@ export default async function ItemStockPage({ params }: PageProps<"/stock/item/[
   return (
     <>
       <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/stock" title={item.name} />
-      <LiveRefresh />
       <Page>
         {unitRows.map((u) => (
           <section key={u.unitCode ?? ""} className="space-y-2">

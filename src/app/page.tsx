@@ -3,7 +3,6 @@ import { ctxFor, requireUser } from "@/auth/session";
 import { db } from "@/db/client";
 import { stockOverview } from "@/stock/service";
 import { orderList } from "@/ledger/queries";
-import { LiveRefresh } from "@/components/live-refresh";
 import { messages } from "@/i18n/messages";
 import { AppHeader } from "@/components/app-header";
 import { InstallPrompt } from "@/components/install-prompt";
@@ -41,7 +40,6 @@ export default async function Home() {
         lang={user.language}
         menu={{ role: user.role, stockKeeper: user.stockKeeper, lowCount: lowItems.length, unmatchedCount: unmatched.lines, firms: firms.map((f) => ({ companyId: f.companyId, name: f.name, current: f.current })) }}
       />
-      <LiveRefresh seconds={30} />
       <Page>
         <OutboxStatus t={t} />
 
