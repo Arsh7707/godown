@@ -75,35 +75,35 @@ export function ReminderSettings({ t, owner }: { t: Messages; owner: boolean }) 
   }
 
   if (state === "loading" || state === "unsupported") return null;
-  const btn = "rounded-xl px-4 py-2.5 font-semibold";
+  const btn = "rounded-control px-4 py-2.5 font-semibold";
   return (
-    <section className="rounded-2xl border-2 border-stone-300 bg-white p-4 shadow-sm">
+    <section className="rounded-card border-2 border-line-strong bg-surface p-4 shadow-card">
       <h2 className="text-xl font-bold">🔔 {t.n.title}</h2>
       {state === "on" ? (
         <>
-          <p className="mt-1 font-semibold text-[#2e7d4f]">✓ {t.n.on}</p>
+          <p className="mt-1 font-semibold text-go">✓ {t.n.on}</p>
           <div className="mt-3 flex gap-2">
-            <button className={`${btn} bg-[#1f4e79] text-white`} onClick={test}>
+            <button className={`${btn} bg-brand text-ink-inverse`} onClick={test}>
               {t.n.test}
             </button>
-            <button className={`${btn} border border-stone-300`} onClick={turnOff}>
+            <button className={`${btn} border border-line-strong`} onClick={turnOff}>
               {t.n.turnOff}
             </button>
           </div>
         </>
       ) : (
         <>
-          <p className="mt-1 text-sm text-stone-600">
+          <p className="mt-1 text-sm text-ink-muted">
             {state === "installFirst" ? t.n.installFirst : state === "blocked" ? t.n.blocked : state === "notReady" ? t.n.notReady : owner ? t.n.hint : t.n.hintKeeper}
           </p>
           {(state === "off" || state === "busy") && (
-            <button className={`${btn} mt-3 w-full bg-[#1f4e79] py-3.5 text-lg text-white disabled:opacity-50`} disabled={state === "busy"} onClick={turnOn}>
+            <button className={`${btn} mt-3 w-full bg-brand py-3.5 text-lg text-ink-inverse disabled:opacity-50`} disabled={state === "busy"} onClick={turnOn}>
               {t.n.turnOn}
             </button>
           )}
         </>
       )}
-      {note && <p className="mt-2 text-sm text-red-700">{note}</p>}
+      {note && <p className="mt-2 text-sm text-danger">{note}</p>}
     </section>
   );
 }

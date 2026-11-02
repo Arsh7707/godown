@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { Icon } from "./ui/icons";
 import type { Messages } from "@/i18n/messages";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -39,12 +40,12 @@ export function InstallPrompt({ t }: { t: Messages }) {
 
   if (hidden) return null;
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-[#1f4e79]/20 bg-[#1f4e79]/5 p-3">
+    <div className="flex items-center gap-3 rounded-card bg-brand-soft p-3">
       <Image src="/icons/icon-192.png" alt="" width={40} height={40} className="rounded-lg" />
-      <p className="flex-1 text-sm text-stone-700">{ios ? t.installIos : t.installHint}</p>
+      <p className="flex-1 text-sm text-ink-muted">{ios ? t.installIos : t.installHint}</p>
       {evt && (
         <button
-          className="rounded-xl bg-[#1f4e79] px-4 py-2.5 font-semibold text-white"
+          className="min-h-12 rounded-control bg-brand px-4 font-semibold text-ink-inverse"
           onClick={async () => {
             await evt.prompt();
             await evt.userChoice;
@@ -54,8 +55,8 @@ export function InstallPrompt({ t }: { t: Messages }) {
           {t.install}
         </button>
       )}
-      <button className="px-1 text-xl text-stone-400" aria-label="Close" onClick={() => setHidden(true)}>
-        ×
+      <button className="flex size-12 shrink-0 items-center justify-center rounded-control text-ink-subtle" aria-label={t.ui.close} onClick={() => setHidden(true)}>
+        <Icon name="close" size={22} />
       </button>
     </div>
   );

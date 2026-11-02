@@ -37,8 +37,8 @@ export function ClientEditor({ lang, party, canDelete }: { lang: Lang; party: Pa
   const changed = name.trim() !== party.name || phone.trim() !== (party.phone ?? "") || city.trim() !== (party.city ?? "") || state !== (party.state ?? "") || taxChanged;
   const taxReady = !taxChanged || taxType === "" || taxId.trim() !== "";
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-5 px-4 py-5">
-      <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
+      <div className="space-y-3 rounded-card bg-surface p-4 shadow-card">
         <label className="block space-y-1.5">
           <span className={mlabel}>{t.m.name}</span>
           <input value={name} onChange={(e) => setName(e.target.value)} className={mfield} />
@@ -59,19 +59,19 @@ export function ClientEditor({ lang, party, canDelete }: { lang: Lang; party: Pa
                   setTaxType(k);
                   setTaxId(k === "gstin" && party.taxIdType === "gstin" ? (party.taxId ?? "") : "");
                 }}
-                className={`rounded-xl border-2 py-2.5 font-semibold ${taxType === k ? "border-[#1f4e79] bg-[#1f4e79] text-white" : "border-stone-300"}`}
+                className={`rounded-control border-2 py-2.5 font-semibold ${taxType === k ? "border-brand bg-brand text-ink-inverse" : "border-line-strong"}`}
               >
                 {k === "gstin" ? t.m.gstin : k === "aadhaar" ? t.m.aadhaar : t.m.taxNone}
               </button>
             ))}
           </div>
           {taxType === "aadhaar" && party.taxIdType === "aadhaar" && (
-            <p className="flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2 font-mono">
+            <p className="flex items-center justify-between rounded-control bg-sunken px-3 py-2 font-mono">
               {revealed ?? party.taxId}
               {!revealed && (
                 <button
                   type="button"
-                  className="font-sans text-sm font-semibold text-[#1f4e79] underline"
+                  className="font-sans text-sm font-semibold text-brand underline"
                   onClick={async () => {
                     const r = await postJson<{ taxId: string }>("/api/manage", { action: "party.taxid.reveal", id: party.id }).catch(() => null);
                     if (r?.ok) setRevealed(r.taxId.replace(/(\d{4})(?=\d)/g, "$1 "));
@@ -93,9 +93,9 @@ export function ClientEditor({ lang, party, canDelete }: { lang: Lang; party: Pa
               className={`${mfield} font-mono`}
             />
           )}
-          {taxType && <p className="text-xs text-stone-500">{taxType === "gstin" ? t.m.gstinHint : t.m.aadhaarHint}</p>}
+          {taxType && <p className="text-sm text-ink-subtle">{taxType === "gstin" ? t.m.gstinHint : t.m.aadhaarHint}</p>}
         </div>
-        {name.trim() !== party.name && <p className="text-xs text-stone-500">{t.m.renameNote}</p>}
+        {name.trim() !== party.name && <p className="text-sm text-ink-subtle">{t.m.renameNote}</p>}
         <button
           disabled={busy || !changed || !name.trim() || !taxReady}
           onClick={() =>
@@ -109,16 +109,16 @@ export function ClientEditor({ lang, party, canDelete }: { lang: Lang; party: Pa
               ...(taxChanged ? { taxIdType: taxType || null, taxId: taxType ? taxId.trim() : null } : {}),
             })
           }
-          className="w-full rounded-xl bg-[#2e7d4f] py-3 text-lg font-semibold text-white disabled:opacity-40"
+          className="w-full rounded-control bg-go py-3 text-lg font-semibold text-ink-inverse disabled:opacity-40"
         >
           {t.m.save}
         </button>
       </div>
       {message}
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className="rounded-card bg-surface p-4 shadow-card">
         <AliasEditor t={t} aliases={party.aliases} busy={busy} onAdd={(alias) => act({ action: "party.alias.add", id: party.id, alias })} onRemove={(aliasId) => act({ action: "party.alias.remove", aliasId })} />
       </div>
-      <Link href={`/pending/party/${party.id}`} className="block rounded-xl border-2 border-stone-300 py-3 text-center font-semibold">
+      <Link href={`/pending/party/${party.id}`} className="block rounded-control border-2 border-line-strong py-3 text-center font-semibold">
         📋 {t.m.openPending}
       </Link>
       <HideDelete

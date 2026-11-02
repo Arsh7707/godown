@@ -12,7 +12,7 @@ export function DayPicker({ day, today, label }: { day: string; today: string; l
       value={day}
       max={today}
       onChange={(e) => e.target.value && e.target.value <= today && router.push(`/history?date=${e.target.value}`)}
-      className="min-w-0 flex-1 rounded-xl border-2 border-stone-300 bg-white px-3 py-3 text-center text-lg"
+      className="min-w-0 flex-1 rounded-control border-2 border-line-strong bg-surface px-3 py-3 text-center text-lg"
     />
   );
 }

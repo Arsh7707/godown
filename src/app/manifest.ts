@@ -9,9 +9,10 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
+    display_override: ["standalone"],
     orientation: "portrait",
-    background_color: "#f6f5f2",
-    theme_color: "#1f4e79",
+    background_color: "#f4f3ef",
+    theme_color: "#f4f3ef",
     lang: "hi",
     // Android: shows Godown in WhatsApp's Share menu for voice notes, photos and text.
     share_target: {

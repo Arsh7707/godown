@@ -113,6 +113,53 @@ export async function partyOrders(db: Db, ctx: Ctx, partyId: string) {
   };
 }
 
+export interface OrderListRow {
+  orderId: string;
+  partyId: string;
+  partyName: string;
+  orderDate: string;
+  promisedDate: string | null;
+  cancelled: boolean;
+  daysOld: number;
+  overdue: boolean;
+  lines: (PendingItemRow & { cancelled: number })[];
+}
+
+/** Every order of the firm, newest first, with each line's ordered / sent / balance (for the Orders list). */
+export async function orderList(db: Db, ctx: Ctx): Promise<OrderListRow[]> {
+  const today = todayIST(ctx.now);
+  const { lines } = await loadState(db, ctx.companyId);
+  const [ps, its] = await Promise.all([
+    db.select({ id: parties.id, name: parties.name }).from(parties).where(eq(parties.companyId, ctx.companyId)),
+    db.select({ id: items.id, name: items.name, unit: items.unit }).from(items).where(eq(items.companyId, stockOf(ctx))),
+  ]);
+  const partyName = new Map(ps.map((p) => [p.id, p.name]));
+  const item = new Map(its.map((i) => [i.id, i]));
+  const byOrder = new Map<string, OrderListRow & { lineNos: number[] }>();
+  for (const l of lines) {
+    const o = byOrder.get(l.orderId) ?? {
+      orderId: l.orderId,
+      partyId: l.partyId,
+      partyName: partyName.get(l.partyId) ?? "?",
+      orderDate: l.orderDate,
+      promisedDate: l.promisedDate,
+      cancelled: l.status === "cancelled",
+      daysOld: daysOld(l, today),
+      overdue: false,
+      lines: [],
+      lineNos: [],
+    };
+    const it = item.get(l.itemId)!;
+    o.lines.push({ itemId: l.itemId, unitCode: l.unit ?? null, itemName: it.name, unit: unitLabel(l.unit, it.unit), ordered: l.ordered, sent: l.dispatched, balance: balance(l), cancelled: cancelledQty(l) });
+    o.lineNos.push(l.lineNo);
+    o.overdue ||= isOverdue(l, today);
+    byOrder.set(l.orderId, o);
+  }
+  return [...byOrder.values()]
+    .map(({ lineNos, ...o }) => ({ ...o, lines: o.lines.map((x, i) => [lineNos[i], x] as const).sort((a, b) => a[0] - b[0]).map(([, x]) => x) }))
+    .sort((a, b) => b.orderDate.localeCompare(a.orderDate) || a.partyName.localeCompare(b.partyName));
+}
+
 /** A dispatch's current version, to pre-fill the edit form. */
 export async function dispatchForEdit(db: Db, ctx: Ctx, dispatchId: string) {
   const [d] = await db.select().from(dispatches).where(and(eq(dispatches.id, dispatchId), eq(dispatches.companyId, ctx.companyId)));

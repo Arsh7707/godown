@@ -8,7 +8,7 @@ import type { Messages } from "@/i18n/messages";
 export function SourceSummary({ t, summary, text }: { t: Messages; summary: string | null | undefined; text: string | null | undefined }) {
   if (!summary && !text) return null;
   return (
-    <div className="space-y-2 rounded-xl bg-stone-100 p-3 text-sm text-stone-700">
+    <div className="space-y-2 rounded-card bg-sunken p-4 text-sm text-ink-muted">
       {summary && (
         <p>
           <b>{t.e.summaryLabel}:</b> {summary}
@@ -16,8 +16,8 @@ export function SourceSummary({ t, summary, text }: { t: Messages; summary: stri
       )}
       {text && (
         <details open={!summary}>
-          <summary className="cursor-pointer text-stone-500">{t.e.whatWasHeard}</summary>
-          <p className="mt-1 whitespace-pre-wrap text-stone-600">{text}</p>
+          <summary className="flex min-h-12 cursor-pointer items-center font-semibold text-brand">{t.e.whatWasHeard}</summary>
+          <p className="mt-1 whitespace-pre-wrap break-words text-ink">{text}</p>
         </details>
       )}
     </div>

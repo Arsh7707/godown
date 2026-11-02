@@ -2,7 +2,6 @@
 import { formatDay } from "@/lib/dates";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { messages, type Lang, type Messages } from "@/i18n/messages";
 import type { DraftEntry, ExtractionResult, Issue } from "@/extraction/types";
 import type { DispatchPlan } from "@/ledger/service";
@@ -15,6 +14,13 @@ import { clearShared, readShared } from "@/client/shared";
 import { audioSeconds, compressImage, normalizeAudio, useRecorder } from "@/client/media";
 import { Allocation, EntryForm, stockPhrase, type SaveOutcome } from "./entry-form";
 import { SourceSummary } from "./source-summary";
+import { fill, words } from "@/lib/text";
+import { TaskHeader } from "./task-header";
+import { Button, ButtonLink } from "../ui/button";
+import { Notice } from "../ui/feedback";
+import { Icon } from "../ui/icons";
+import { Qty } from "../ui/screen";
+import { inputClass } from "../ui/field";
 import { emptyForm, extractionKind, formFromDraft, isStock, payload, saveUrl, type EntrySource, type FormKind, type FormState } from "./form-state";
 
 type Kind = FormKind;
@@ -294,21 +300,22 @@ export function EntryScreen({
 
   const nextPhoto = photoPos && photoPos.i + 1 < photoPos.total ? photoPos.i + 1 : null;
   const photoBar = photoPos && step.s !== "busy" && (
-    <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-[#1f4e79]/10 px-4 py-2.5 font-semibold text-[#1f4e79]">
-      <span>
-        🖼️ {t.e.photoOf} {photoPos.i + 1}/{photoPos.total}
+    <div className="mb-4 flex items-center justify-between gap-3 rounded-card bg-brand-soft px-4 py-1 font-semibold text-brand-strong">
+      <span className="flex items-center gap-2">
+        <Icon name="image" size={20} />
+        {t.e.photoOf} {photoPos.i + 1}/{photoPos.total}
       </span>
       {nextPhoto !== null && step.s !== "done" && step.s !== "queuedCapture" && (
-        <button onClick={() => showPhoto(nextPhoto)} className="text-sm underline">
-          {t.e.skipPhoto} →
-        </button>
+        <Button variant="ghost" size="md" trailingIcon="arrowRight" onClick={() => showPhoto(nextPhoto)}>
+          {t.e.skipPhoto}
+        </Button>
       )}
     </div>
   );
   const nextPhotoButton = nextPhoto !== null && (
-    <button onClick={() => showPhoto(nextPhoto)} className="w-full rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white">
-      🖼️ {t.e.nextPhoto} ({nextPhoto + 1}/{photoPos!.total}) →
-    </button>
+    <Button variant="primary" size="lg" block icon="image" trailingIcon="arrowRight" onClick={() => showPhoto(nextPhoto)}>
+      {t.e.nextPhoto} ({nextPhoto + 1}/{photoPos!.total})
+    </Button>
   );
 
   function sourceFor(capture: Capture, result: Extract<ExtractionResult, { ok: true }>, i: number): EntrySource {
@@ -340,9 +347,15 @@ export function EntryScreen({
     return (
       <Shell t={t} title={title} back={day ? `/history?date=${day}` : isStock(kind) ? "/stock" : "/"}>
         {photoBar}
-        {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-amber-900">{error}</p>}
+        {error && (
+          <div className="mb-4">
+            <Notice tone="warn" role="alert">
+              {error}
+            </Notice>
+          </div>
+        )}
         {step.back?.s === "review" && step.entryIndex !== null && step.back.result.entries.length > 1 && (
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-400">
+          <p className="mb-3 text-sm font-semibold text-ink-subtle">
             {t.e.entryOf} {step.entryIndex + 1}/{step.back.result.entries.length}
           </p>
         )}
@@ -385,22 +398,35 @@ export function EntryScreen({
 
   return (
     <Shell t={t} title={title} back={day ? `/history?date=${day}` : isStock(kind) ? "/stock" : "/"}>
-      {!online && <p className="mb-4 rounded-xl bg-stone-800 p-3 text-sm text-white">{t.offline}</p>}
+      {!online && (
+        <p role="status" className="mb-4 flex items-start gap-3 rounded-card bg-ink p-4 text-base text-ink-inverse">
+          <Icon name="wifiOff" size={22} className="mt-0.5" />
+          {t.offline}
+        </p>
+      )}
       {photoBar}
-      {error && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-amber-900">{error}</p>}
+      {error && (
+          <div className="mb-4">
+            <Notice tone="warn" role="alert">
+              {error}
+            </Notice>
+          </div>
+        )}
 
       {step.s === "queuedCapture" && (
         <div className="space-y-4 py-6 text-center">
-          <p className="text-5xl">📥</p>
+          <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-status-pending-bg text-status-pending">
+            <Icon name="inbox" size={40} />
+          </span>
           <p className="text-lg">{t.e.queuedCapture}</p>
           {nextPhotoButton}
           <div className="grid grid-cols-2 gap-3 pt-2">
-            <button onClick={() => setStep({ s: "capture" })} className="rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white">
+            <Button variant="primary" size="lg" icon="plus" onClick={() => setStep({ s: "capture" })}>
               {t.e.another}
-            </button>
-            <Link href="/" className="rounded-xl border-2 border-stone-300 py-4 text-center text-lg font-semibold">
+            </Button>
+            <ButtonLink href="/" variant="secondary" size="lg" icon="home">
               {t.e.home}
-            </Link>
+            </ButtonLink>
           </div>
         </div>
       )}
@@ -410,26 +436,29 @@ export function EntryScreen({
 
       {step.s === "typing" && (
         <div className="space-y-4">
-          <textarea autoFocus rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder={t.e.typeHint} className="w-full rounded-2xl border border-stone-300 bg-white p-4 text-lg outline-none focus:border-[#1f4e79]" />
-          <button
+          <textarea autoFocus rows={5} aria-label={t.e.type} value={text} onChange={(e) => setText(e.target.value)} placeholder={t.e.typeHint} className={inputClass(false, "min-h-40")} />
+          <Button
+            variant="primary"
+            size="lg"
+            block
+            icon="arrowRight"
             disabled={!text.trim()}
             onClick={() => {
               const captureId = newId();
               read({ captureId, inputMethod: "text", attachmentId: null }, { text: text.trim() });
             }}
-            className="w-full rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white disabled:opacity-40"
           >
             {t.e.readIt}
-          </button>
-          <button onClick={() => manualForm({ s: "typing" })} className="w-full rounded-xl border-2 border-stone-300 py-4 text-lg font-semibold text-stone-700">
+          </Button>
+          <Button variant="secondary" size="lg" block icon="edit" onClick={() => manualForm({ s: "typing" })}>
             {t.e.fillForm}
-          </button>
+          </Button>
         </div>
       )}
 
       {step.s === "busy" && (
-        <div className="flex flex-col items-center gap-4 py-24 text-stone-600" aria-live="polite">
-          <div className="size-12 animate-spin rounded-full border-4 border-stone-200 border-t-[#1f4e79]" />
+        <div className="flex flex-col items-center gap-4 py-24 text-ink-muted" role="status" aria-live="polite">
+          <div className="size-14 animate-spin rounded-full border-4 border-line border-t-brand" aria-hidden />
           <p className="text-lg">{step.label}</p>
         </div>
       )}
@@ -438,15 +467,15 @@ export function EntryScreen({
         <div className="space-y-4">
           {step.result.entries.length === 0 ? (
             <div className="space-y-4">
-              <p className="rounded-2xl bg-stone-100 p-4 text-lg">{t.e.notRelevant}</p>
-              {step.result.summary && <p className="text-stone-600">“{step.result.summary}”</p>}
-              <button onClick={() => manualForm(step)} className="w-full rounded-xl border-2 border-stone-300 py-4 text-lg font-semibold">
+              <Notice tone="info">{t.e.notRelevant}</Notice>
+              {step.result.summary && <p className="text-ink-muted">“{step.result.summary}”</p>}
+              <Button variant="secondary" size="lg" block icon="edit" onClick={() => manualForm(step)}>
                 {t.e.fillForm}
-              </button>
+              </Button>
             </div>
           ) : (
             <>
-              {step.result.entries.length > 1 && <p className="text-stone-600">{t.e.checkEachEntry}</p>}
+              {step.result.entries.length > 1 && <p className="text-ink-muted">{t.e.checkEachEntry}</p>}
               {step.result.entries.map((entry, i) => (
                 <ReviewCard
                   key={i}
@@ -474,49 +503,60 @@ export function EntryScreen({
       )}
 
       {step.s === "done" && (
-        <div className="space-y-4">
-          <p className="text-center text-2xl font-bold text-[#2e7d4f]">✓ {t.e.saved}</p>
+        <div className="space-y-4 pb-8">
+          <div className="flex flex-col items-center gap-2 py-4 text-center" role="status">
+            <span className="flex size-20 items-center justify-center rounded-full bg-status-fulfilled-bg text-status-fulfilled">
+              <Icon name="check" size={44} strokeWidth={2.6} />
+            </span>
+            <p className="text-2xl font-bold text-status-fulfilled">{t.e.saved}</p>
+          </div>
           {step.outcomes.map((s, i) =>
             "queued" in s ? (
-              <div key={i} className="space-y-1 rounded-2xl bg-stone-800 p-4 text-white">
-                <p className="text-lg">{s.label}</p>
-                <p className="text-sm opacity-80">📥 {t.e.queuedSave}</p>
+              <div key={i} className="space-y-1 rounded-card bg-ink p-4 text-ink-inverse">
+                <p className="text-lg break-words">{s.label}</p>
+                <p className="flex items-center gap-2 text-sm opacity-90">
+                  <Icon name="inbox" size={18} />
+                  {t.e.queuedSave}
+                </p>
               </div>
             ) : (
-              <div key={i} className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
-                <p className="text-lg">{s.text}</p>
-                <a href={s.url} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#25d366] py-4 text-lg font-semibold text-white">
+              <div key={i} className="space-y-3 rounded-card bg-surface p-4 shadow-card">
+                <p className="text-lg break-words">{s.text}</p>
+                <a href={s.url} target="_blank" rel="noreferrer" className="flex min-h-14 w-full items-center justify-center gap-2 rounded-control bg-whatsapp text-lg font-semibold text-ink-inverse shadow-card active:brightness-95">
+                  <Icon name="share" size={22} />
                   {t.e.share}
                 </a>
                 {kind === "order" && s.orderId && (
-                  <Link href={`/orders/${s.orderId}`} className="block text-center text-[#1f4e79] underline">
-                    📋 {t.o.addedToPending}
-                  </Link>
-                )}
-                {kind === "order" && s.orderId && (
-                  <Link href={`/dispatch/new?order=${s.orderId}`} className="flex w-full items-center justify-center rounded-xl border-2 border-[#2e7d4f] py-3 text-lg font-semibold text-[#2e7d4f]">
-                    🚚 {t.o.dispatchNow}
-                  </Link>
+                  <div className="grid grid-cols-2 gap-3">
+                    <ButtonLink href={`/orders/${s.orderId}`} variant="secondary" size="md" icon="orders">
+                      {t.o.addedToPending}
+                    </ButtonLink>
+                    <ButtonLink href={`/dispatch/new?order=${s.orderId}`} variant="go" size="md" icon="truck">
+                      {t.o.dispatchNow}
+                    </ButtonLink>
+                  </div>
                 )}
               </div>
             ),
           )}
           {nextPhotoButton}
           <div className="grid grid-cols-2 gap-3 pt-2">
-            <button
+            <Button
+              variant="primary"
+              size="lg"
+              icon="plus"
               onClick={() => {
                 setText("");
                 batch.current = null;
                 setPhotoPos(null);
                 setStep({ s: "capture" });
               }}
-              className="rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white"
             >
               {t.e.another}
-            </button>
-            <Link href={isStock(kind) ? "/stock" : "/"} className="rounded-xl border-2 border-stone-300 py-4 text-center text-lg font-semibold">
+            </Button>
+            <ButtonLink href={isStock(kind) ? "/stock" : "/"} variant="secondary" size="lg" icon={isStock(kind) ? "stock" : "home"}>
               {isStock(kind) ? t.s.title : t.e.home}
-            </Link>
+            </ButtonLink>
           </div>
         </div>
       )}
@@ -527,15 +567,8 @@ export function EntryScreen({
 function Shell({ t, title, children, back = "/" }: { t: Messages; title: string; children: React.ReactNode; back?: string }) {
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center gap-2">
-          <Link href={back} className="-ml-2 rounded-lg px-2 py-1 text-3xl leading-none text-[#1f4e79]" aria-label={t.e.home}>
-            ‹
-          </Link>
-          <h1 className="text-xl font-bold text-[#1f4e79]">{title}</h1>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-md flex-1 px-4 py-5">{children}</main>
+      <TaskHeader title={title} back={back} backLabel={t.ui.back} />
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 pt-5">{children}</main>
     </>
   );
 }
@@ -557,38 +590,56 @@ function CapturePanel({
   const galleryRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const { state, elapsed, toggle } = useRecorder(onVoice);
-  const tile = "flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl text-lg font-semibold shadow-sm select-none active:scale-[.98]";
   const recording = state === "recording";
+  const tile = "flex min-h-28 flex-col items-center justify-center gap-2 rounded-card px-2 py-4 text-lg font-semibold shadow-card select-none active:scale-[.98] transition-transform";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      {/* Three ways in, as big as possible: a picture and one word each. */}
       <div className="grid grid-cols-3 gap-3">
-        <button className={`${tile} bg-[#1f4e79] text-white`} onClick={() => fileRef.current?.click()}>
-          <span className="text-4xl" aria-hidden>📷</span>
-          {t.e.takePhoto}
+        <button type="button" className={`${tile} bg-brand text-ink-inverse`} onClick={() => fileRef.current?.click()}>
+          <Icon name="camera" size={40} strokeWidth={1.8} />
+          <span className="text-center leading-tight">{t.e.takePhoto}</span>
         </button>
-        <button
-          className={`${tile} ${recording ? "scale-105 bg-red-600 text-white" : "bg-[#2e7d4f] text-white"}`}
-          onClick={toggle}
-          aria-pressed={recording}
-        >
-          <span className="text-4xl" aria-hidden>🎤</span>
-          {recording ? `${Math.floor(elapsed)}s` : t.e.voice}
+        <button type="button" className={`${tile} ${recording ? "bg-danger text-ink-inverse ring-4 ring-danger/30" : "bg-go text-ink-inverse"}`} onClick={toggle} aria-pressed={recording}>
+          <Icon name="mic" size={40} strokeWidth={1.8} className={recording ? "animate-pulse" : ""} />
+          <span className="num text-center leading-tight">{recording ? `${Math.floor(elapsed)}s` : t.e.voice}</span>
         </button>
-        <button className={`${tile} border-2 border-stone-300 bg-white`} onClick={onType}>
-          <span className="text-4xl" aria-hidden>⌨️</span>
-          {t.e.type}
+        <button type="button" className={`${tile} border-2 border-line-strong bg-surface text-ink`} onClick={onType}>
+          <Icon name="keyboard" size={40} strokeWidth={1.8} />
+          <span className="text-center leading-tight">{t.e.type}</span>
         </button>
       </div>
-      <p className="text-center text-stone-600">{recording ? t.e.releaseToSend : state === "tooShort" ? t.e.holdLonger : t.e.holdToRecord}</p>
-      {state === "blocked" && <p className="rounded-xl bg-red-50 p-3 text-red-800">{t.e.micBlocked}</p>}
-      <button onClick={() => galleryRef.current?.click()} className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#1f4e79]/10 py-4 text-lg font-semibold text-[#1f4e79]">
-        🖼️ {t.e.gallery} <span className="text-sm font-normal">· {t.e.galleryHint}</span>
-      </button>
-      <button onClick={() => importRef.current?.click()} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-stone-300 py-4 text-lg font-semibold text-stone-700">
-        📎 {t.e.importFile}
-      </button>
-      <p className="text-center text-sm text-stone-500">{t.e.importHint}</p>
+      <p className="text-center text-base text-ink-muted" aria-live="polite">
+        {recording ? t.e.releaseToSend : state === "tooShort" ? t.e.holdLonger : t.e.holdToRecord}
+      </p>
+      {state === "blocked" && (
+        <Notice tone="error" role="alert">
+          {t.e.micBlocked}
+        </Notice>
+      )}
+      <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
+        <button type="button" onClick={() => galleryRef.current?.click()} className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left active:bg-sunken">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
+            <Icon name="image" size={22} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{t.e.gallery}</span>
+            <span className="block text-sm text-ink-subtle">{t.e.galleryHint}</span>
+          </span>
+          <Icon name="chevron" size={20} className="text-ink-subtle" />
+        </button>
+        <button type="button" onClick={() => importRef.current?.click()} className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left active:bg-sunken">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-go-soft text-go">
+            <Icon name="paperclip" size={22} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{t.e.importFile}</span>
+            <span className="block text-sm text-ink-subtle">{t.e.importHint}</span>
+          </span>
+          <Icon name="chevron" size={20} className="text-ink-subtle" />
+        </button>
+      </div>
       <input
         ref={importRef}
         type="file"
@@ -679,9 +730,12 @@ function ReviewCard({
 
   if (status.state !== "open") {
     return (
-      <div className="flex items-center justify-between rounded-2xl bg-stone-100 p-4 text-stone-600">
-        <span>{isStock(kind) ? title : (partyName ?? d.party.mention ?? "?")}</span>
-        <span className={status.state === "saved" ? "font-semibold text-[#2e7d4f]" : ""}>{status.state === "saved" ? ("queued" in status.outcome ? `📥 ${t.e.queuedShort}` : `✓ ${t.e.saved}`) : t.e.skipped}</span>
+      <div className="flex min-h-14 items-center justify-between gap-3 rounded-card bg-sunken p-4 text-ink-muted">
+        <span className="break-words">{isStock(kind) ? title : (partyName ?? d.party.mention ?? "?")}</span>
+        <span className={`flex shrink-0 items-center gap-1.5 font-semibold ${status.state === "saved" ? "text-status-fulfilled" : ""}`}>
+          {status.state === "saved" && <Icon name={"queued" in status.outcome ? "inbox" : "checkCircle"} size={20} />}
+          {status.state === "saved" ? ("queued" in status.outcome ? t.e.queuedShort : t.e.saved) : t.e.skipped}
+        </span>
       </div>
     );
   }
@@ -713,42 +767,46 @@ function ReviewCard({
   const fmtDate = (s: string) => formatDay(s, { year: true });
 
   return (
-    <div className={`space-y-3 rounded-2xl border-2 bg-white p-4 shadow-sm ${entry.readyToConfirm ? "border-emerald-300" : "border-amber-300"}`}>
+    <div className={`space-y-3 rounded-card border-2 bg-surface p-4 shadow-card ${entry.readyToConfirm ? "border-go/40" : "border-status-pending/40"}`}>
       {total > 1 && (
-        <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+        <p className="text-sm font-semibold text-ink-subtle">
           {t.e.entryOf} {index + 1}/{total}
         </p>
       )}
       {isStock(kind) ? (
         <p className="text-xl font-bold">{title}</p>
       ) : (
-        <p className={`text-xl font-bold ${partyName ? "" : "text-amber-800"}`}>{partyName ?? `“${d.party.mention ?? "?"}”`}</p>
+        <p className={`text-xl font-bold break-words ${partyName ? "" : "text-status-pending"}`}>{partyName ?? `“${d.party.mention ?? "?"}”`}</p>
       )}
-      <ul className="space-y-1">
+      <ul className="divide-y divide-line">
         {d.lines.map((l, i) => {
           const m = l.item.status === "matched" ? l.item : null;
           return (
-            <li key={i} className="flex justify-between gap-3 text-lg">
-              <span className={m ? "" : "text-amber-800"}>{m ? m.name : `“${l.item.mention}”`}</span>
-              <span className="font-semibold tabular-nums">
-                {/* Show the unit as said; it may differ from the item's unit (flagged below). */}
-                {l.quantity ?? "?"} {l.unit ?? l.unitSaid ?? (m ? (catalog.items.find((x) => x.id === m.id)?.unit ?? "") : "")}
-              </span>
+            <li key={i} className="flex items-baseline justify-between gap-3 py-2 text-lg">
+              <span className={`min-w-0 flex-1 break-words ${m ? "" : "text-status-pending"}`}>{m ? m.name : `“${l.item.mention}”`}</span>
+              {/* Show the unit as said; it may differ from the item's unit (flagged below). */}
+              <Qty n={l.quantity != null ? String(l.quantity) : "?"} unit={l.unit ?? l.unitSaid ?? (m ? (catalog.items.find((x) => x.id === m.id)?.unit ?? "") : "")} className="text-xl font-bold" />
             </li>
           );
         })}
       </ul>
-      <p className="text-sm text-stone-600">
+      <p className="text-sm text-ink-muted">
         {fmtDate(d.entryDate)}
         {d.promisedDate && ` → ${fmtDate(d.promisedDate)}`}
         {[d.takenBy, d.transport, d.lrNumber && `LR ${d.lrNumber}`].filter(Boolean).map((x) => ` · ${x}`)}
       </p>
-      {d.notes && <p className="rounded-lg bg-stone-50 p-2 text-sm text-stone-700">📝 {d.notes}</p>}
+      {d.notes && (
+        <p className="flex gap-2 rounded-control bg-sunken p-3 text-sm text-ink-muted">
+          <Icon name="note" size={18} className="mt-0.5" />
+          <span className="break-words">{d.notes}</span>
+        </p>
+      )}
       {entry.issues.length > 0 && (
         <ul className="space-y-1 text-sm">
           {entry.issues.map((i, k) => (
-            <li key={k} className={i.blocking ? "text-amber-800" : "text-stone-500"}>
-              • {t.issue[i.code] ?? i.code}
+            <li key={k} className={`flex gap-2 ${i.blocking ? "font-semibold text-status-pending" : "text-ink-subtle"}`}>
+              <Icon name={i.blocking ? "alert" : "question"} size={16} className="mt-1" />
+              {t.issue[i.code] ?? i.code}
               {/* The unclear party/item name is already shown above in orange. */}
               {i.detail && i.code !== "PARTY_UNCERTAIN" && i.code !== "ITEM_UNCERTAIN" ? ` (${i.detail})` : ""}
             </li>
@@ -757,27 +815,31 @@ function ReviewCard({
       )}
       {plan && <Allocation t={t} plan={plan} itemById={itemById} />}
       {shortfalls.length > 0 && (
-        <div className="space-y-1 rounded-xl border-2 border-red-300 bg-red-50 p-3 text-red-900">
+        <Notice tone="error" role="alert">
           {shortfalls.map((s) => (
-            <p key={unitKey(s.itemId, s.unit)}>
-              ⚠ {itemById.get(s.itemId)?.name}: {stockPhrase(t, stock[unitKey(s.itemId, s.unit)] ?? 0)}, {t.s.sendingShort} {s.quantity} {unitLabel(s.unit, itemById.get(s.itemId)?.unit ?? "")}
+            <p key={unitKey(s.itemId, s.unit)} className="font-semibold">
+              {itemById.get(s.itemId)?.name}: {stockPhrase(t, stock[unitKey(s.itemId, s.unit)] ?? 0, unitLabel(s.unit, itemById.get(s.itemId)?.unit ?? ""))}, {fill(t.ui.stock.sending, { n: words(s.quantity, unitLabel(s.unit, itemById.get(s.itemId)?.unit ?? "")) })}
             </p>
           ))}
           {overStockOk && <p className="text-sm">{t.s.tapAgain}</p>}
-        </div>
+        </Notice>
       )}
-      {error && <p className="rounded-xl bg-red-50 p-3 text-red-800">{error}</p>}
+      {error && (
+        <Notice tone="error" role="alert">
+          {error}
+        </Notice>
+      )}
       <div className="flex gap-2 pt-1">
-        <button onClick={() => onDone({ state: "skipped" })} className="rounded-xl px-3 py-3 text-stone-500">
+        <Button variant="ghost" size="md" className="text-ink-muted" onClick={() => onDone({ state: "skipped" })}>
           {t.e.skip}
-        </button>
-        <button onClick={onEdit} className={`flex-1 rounded-xl py-3 text-lg font-semibold ${blocking.length ? "bg-amber-500 text-white" : "border-2 border-stone-300"}`}>
+        </Button>
+        <Button variant={blocking.length ? "primary" : "secondary"} size="lg" icon="edit" className="flex-1" onClick={onEdit}>
           {blocking.length ? t.e.needsFix : t.e.edit}
-        </button>
+        </Button>
         {entry.readyToConfirm && (
-          <button disabled={busy} onClick={confirm} className="flex-1 rounded-xl bg-[#2e7d4f] py-3 text-lg font-semibold text-white disabled:opacity-50">
+          <Button variant={shortfalls.length && overStockOk ? "destructive" : "go"} size="lg" icon="check" className="flex-1" disabled={busy} onClick={confirm}>
             {busy ? t.e.saving : shortfalls.length && overStockOk ? t.s.sendAnyway : t.e.confirm}
-          </button>
+          </Button>
         )}
       </div>
       {kind === "order" && entry.readyToConfirm && <UnmatchedHint t={t} partyId={form.partyId} itemIds={form.lines.map((l) => l.itemId).filter(Boolean) as string[]} onEdit={onEdit} />}
@@ -799,8 +861,13 @@ function UnmatchedHint({ t, partyId, itemIds, onEdit }: { t: Messages; partyId: 
   }, [partyId, key]);
   if (!n) return null;
   return (
-    <button onClick={onEdit} className="w-full rounded-xl bg-sky-50 p-3 text-left text-sm text-sky-900">
-      {t.e.unmatchedOffer} {formatQty(n.qty)} → <b>{t.e.edit}</b>
+    <button type="button" onClick={onEdit} className="flex min-h-12 w-full items-center gap-2 rounded-control bg-brand-soft p-3 text-left text-sm text-brand-strong">
+      <Icon name="question" size={18} />
+      <span className="flex-1">
+        {t.e.unmatchedOffer} {formatQty(n.qty)}
+      </span>
+      <b>{t.e.edit}</b>
+      <Icon name="chevron" size={16} />
     </button>
   );
 }

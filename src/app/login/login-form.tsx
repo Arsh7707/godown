@@ -4,12 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { messages, type Lang } from "@/i18n/messages";
 import { LangToggle } from "@/components/lang-toggle";
+import Image from "next/image";
+import { inputClass } from "@/components/ui/field";
+import { buttonClass } from "@/components/ui/button";
+import { Notice } from "@/components/ui/feedback";
+import { Icon } from "@/components/ui/icons";
 
 type Step = { kind: "phone" } | { kind: "code"; phone: string; devCode: string | null } | { kind: "company"; phone: string; code: string; companies: { id: string; name: string }[] };
 
 async function post(url: string, body: unknown) {
   const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  return (await res.json()) as { ok: boolean; code?: string; [k: string]: unknown };
+  // A reply that isn't JSON (a crash or timeout page) is a server problem, not "no connection".
+  return (await res.json().catch(() => ({ ok: false, code: "UNKNOWN", status: res.status }))) as { ok: boolean; code?: string; [k: string]: unknown };
 }
 
 export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang; needsAccessCode: boolean }) {
@@ -23,7 +29,7 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const showError = (c?: string) => setError(t.err[c ?? "UNKNOWN"] ?? t.err.UNKNOWN);
+  const showError = (c?: string, status?: unknown) => setError(`${t.err[c ?? "UNKNOWN"] ?? t.err.UNKNOWN}${typeof status === "number" ? ` (${status})` : ""}`);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -40,7 +46,7 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
   const sendCode = () =>
     run(async () => {
       const r = await post("/api/auth/request", { phone, accessCode });
-      if (!r.ok) return showError(r.code);
+      if (!r.ok) return showError(r.code, r.status);
       setCode("");
       setStep({ kind: "code", phone: r.phone as string, devCode: (r.devCode as string | null) ?? null });
     });
@@ -55,52 +61,56 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
         return;
       }
       if (r.code === "CHOOSE_COMPANY") return setStep({ kind: "company", phone: p, code, companies: r.companies as { id: string; name: string }[] });
-      showError(r.code);
+      showError(r.code, r.status);
     });
 
-  const field = "w-full rounded-xl border border-stone-300 bg-white px-4 py-3.5 text-xl outline-none focus:border-[#1f4e79] focus:ring-2 focus:ring-[#1f4e79]/20";
-  const primary = "w-full rounded-xl bg-[#1f4e79] px-4 py-4 text-lg font-semibold text-white active:scale-[.99] disabled:opacity-50";
+  const field = inputClass(false, "text-xl");
+  const primary = buttonClass("primary", "lg", true);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-[#1f4e79]">{t.appName}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Image src="/icons/icon-192.png" alt="" width={48} height={48} className="rounded-control shadow-card" priority />
+          <h1 className="text-3xl font-bold text-brand">{t.appName}</h1>
+        </div>
         <LangToggle lang={lang} onChange={(l) => { setLang(l); document.cookie = `ob_lang=${l}; path=/; max-age=31536000`; }} />
       </div>
 
       {step.kind === "phone" && (
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); sendCode(); }}>
           <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-stone-600">{t.phoneLabel}</span>
+            <span className="text-sm font-semibold text-ink-muted">{t.phoneLabel}</span>
             <input className={field} type="tel" inputMode="tel" autoComplete="tel" placeholder={t.phonePlaceholder} value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            <span className="block text-sm text-ink-subtle">{t.ui.login.willSend}</span>
           </label>
           {needsAccessCode && (
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-stone-600">{t.accessCodeLabel}</span>
+              <span className="text-sm font-semibold text-ink-muted">{t.accessCodeLabel}</span>
               <input className={field} value={accessCode} onChange={(e) => setAccessCode(e.target.value)} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} required />
-              <span className="block text-xs text-stone-500">{t.accessCodeHint}</span>
+              <span className="block text-sm text-ink-subtle">{t.accessCodeHint}</span>
             </label>
           )}
-          <button className={primary} disabled={busy}>{t.sendCode}</button>
+          <button className={primary} disabled={busy}>{busy ? "…" : t.ui.login.cont}<Icon name="arrowRight" size={22} /></button>
         </form>
       )}
 
       {step.kind === "code" && (
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); verify(); }}>
-          <p className="text-stone-600">
-            {t.codeSentTo} <span className="font-semibold text-stone-900">{step.phone}</span>
+          <p className="text-ink-muted">
+            {t.codeSentTo} <span className="num font-semibold text-ink">{step.phone}</span>
           </p>
           {step.devCode && (
-            <p className="rounded-xl bg-amber-50 p-3 text-amber-900">
+            <p className="rounded-card bg-status-pending-bg p-4 text-status-pending">
               {t.devCodeNote} <span className="font-mono text-2xl font-bold tracking-widest">{step.devCode}</span>
             </p>
           )}
           <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-stone-600">{t.codeLabel}</span>
+            <span className="text-sm font-semibold text-ink-muted">{t.codeLabel}</span>
             <input className={`${field} text-center font-mono text-3xl tracking-[.4em]`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} autoFocus required />
           </label>
           <button className={primary} disabled={busy || code.length !== 6}>{t.verify}</button>
-          <button type="button" className="w-full py-2 text-[#1f4e79]" onClick={() => setStep({ kind: "phone" })}>{t.changeNumber}</button>
+          <button type="button" className={buttonClass("ghost", "md", true)} onClick={() => setStep({ kind: "phone" })}>{t.changeNumber}</button>
         </form>
       )}
 
@@ -113,7 +123,11 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
         </div>
       )}
 
-      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-800">{error}</p>}
+      {error && (
+        <Notice tone="error" role="alert">
+          {error}
+        </Notice>
+      )}
     </div>
   );
 }
