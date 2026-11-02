@@ -57,6 +57,8 @@ const BROKEN_TEXT = /\bNaN\b|\bundefined\b|\[object Object\]|\bInfinity\b|Invali
 
 /** The screen fits the phone, shows no broken values, and has a heading or main content. */
 export async function expectHealthy(page: Page, where = page.url()) {
+  // A slow server can still be showing the loading skeleton (no words yet): wait for the real screen.
+  await expect(page.locator('[aria-busy="true"]'), `still loading on ${where}`).toHaveCount(0, { timeout: 15_000 });
   const text = await page.locator("body").innerText();
   const bad = text.match(BROKEN_TEXT);
   expect(bad?.[0] ?? null, `broken value on ${where}: …${bad ? text.slice(Math.max(0, bad.index! - 60), bad.index! + 40) : ""}…`).toBeNull();

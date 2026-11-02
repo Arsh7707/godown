@@ -17,7 +17,8 @@ export function ActionBar({ children, above, keepWithKeyboard = false }: { child
   return (
     <div data-hide-with-keyboard={keepWithKeyboard ? undefined : ""} className="sticky z-30 -mx-4 mt-6 border-t border-line bg-canvas/95 px-4 pt-3 pb-3 backdrop-blur-md" style={{ bottom: "var(--tabbar-space)" }}>
       {above && <div className="mb-2">{above}</div>}
-      <div className="flex gap-3">{children}</div>
+      {/* Buttons keep their words on one line; if two don't fit side by side (big text, wide fonts) they stack. */}
+      <div className="flex flex-wrap gap-3">{children}</div>
       {/* Without a tab bar below, keep clear of the home indicator. */}
       <div className="h-[env(safe-area-inset-bottom)] [body:has([data-tabbar])_&]:hidden" />
     </div>
