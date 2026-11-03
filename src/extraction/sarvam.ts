@@ -25,7 +25,7 @@ export class SarvamTranscriber implements Transcriber {
     form.append("model", this.model);
     // Users speak Hindi, Punjabi, English or a mix; "unknown" auto-detects per note.
     form.append("language_code", this.languageCode);
-    const terms = (opts.keyterms ?? []).filter((t) => t.length <= MAX_KEYTERM_LENGTH).slice(0, MAX_KEYTERMS);
+    const terms = cleanKeyterms(opts.keyterms ?? []);
     // keyterms biases recognition toward the company's party and item names (saaras:v4).
     if (terms.length && this.model.startsWith("saaras:v4")) {
       form.append("keyterms", JSON.stringify(terms)); // the API wants one JSON array, not repeated fields
@@ -45,6 +45,20 @@ export class SarvamTranscriber implements Transcriber {
     const json = (await res.json()) as { transcript?: string; language_code?: string | null };
     return { text: (json.transcript ?? "").trim(), languageCode: json.language_code ?? null };
   }
+}
+
+/** Sarvam refuses the whole voice note if a name repeats (a party and an item can share one), so keep each once. */
+function cleanKeyterms(keyterms: string[]): string[] {
+  const seen = new Set<string>();
+  return keyterms
+    .map((t) => t.trim())
+    .filter((t) => {
+      const key = t.normalize("NFKC").toLowerCase();
+      if (!t || t.length > MAX_KEYTERM_LENGTH || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, MAX_KEYTERMS);
 }
 
 function extFor(mime: string): string {
