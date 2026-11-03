@@ -83,7 +83,9 @@ test.describe("as owner", () => {
     const targets = ENDPOINTS(seed).filter(([m, u]) => m === "POST" && !u.startsWith("/api/firm") && !u.startsWith("/api/push"));
     const value = fc.oneof(fc.string(), fc.integer(), fc.double(), fc.boolean(), fc.constant(null), fc.uuid(), fc.date({ noInvalidDate: true }).map((d) => d.toISOString().slice(0, 10)));
     const field = fc.constantFrom("partyId", "itemId", "date", "lines", "quantity", "unit", "baseRev", "action", "name", "entryCaptureId", "inputMethod", "kind", "language", "dispatchLineId", "orderLineId", "rows", "reason");
-    const body = fc.dictionary(field, fc.oneof(value, fc.array(fc.dictionary(field, value), { maxLength: 3 })), { maxKeys: 8 });
+    // Some of these really save a client or item. A random name like "acf63" would then stay on screen and fail the design audit's "word glued to a number" rule.
+    const looksGlued = (k: string, v: unknown) => (k === "name" && typeof v === "string" && /[a-zऀ-ॿ]{3,}\d/i.test(v) ? "glued" : v);
+    const body = fc.dictionary(field, fc.oneof(value, fc.array(fc.dictionary(field, value), { maxLength: 3 })), { maxKeys: 8 }).filter((b) => !JSON.stringify(b, looksGlued).includes('"glued"'));
     await fc.assert(
       fc.asyncProperty(fc.constantFrom(...targets), body, async ([method, url], b) => {
         const res = await call(request, method, url, b);
