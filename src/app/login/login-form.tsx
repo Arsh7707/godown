@@ -10,7 +10,7 @@ import { buttonClass } from "@/components/ui/button";
 import { Notice } from "@/components/ui/feedback";
 import { Icon } from "@/components/ui/icons";
 
-type Step = { kind: "phone" } | { kind: "code"; phone: string; devCode: string | null } | { kind: "company"; phone: string; code: string; companies: { id: string; name: string }[] };
+type Step = { kind: "phone" } | { kind: "code"; phone: string; devCode: string | null; whatsapp: boolean } | { kind: "company"; phone: string; code: string; companies: { id: string; name: string }[] };
 
 async function post(url: string, body: unknown) {
   const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -48,7 +48,7 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
       const r = await post("/api/auth/request", { phone, accessCode });
       if (!r.ok) return showError(r.code, r.status);
       setCode("");
-      setStep({ kind: "code", phone: r.phone as string, devCode: (r.devCode as string | null) ?? null });
+      setStep({ kind: "code", phone: r.phone as string, devCode: (r.devCode as string | null) ?? null, whatsapp: r.channel === "whatsapp" });
     });
 
   const verify = (companyId?: string) =>
@@ -98,8 +98,9 @@ export function LoginForm({ initialLang, needsAccessCode }: { initialLang: Lang;
       {step.kind === "code" && (
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); verify(); }}>
           <p className="text-ink-muted">
-            {t.codeSentTo} <span className="num font-semibold text-ink">{step.phone}</span>
+            {step.whatsapp ? t.codeSentWhatsApp : t.codeSentTo} <span className="num font-semibold text-ink">{step.phone}</span>
           </p>
+          {step.whatsapp && <p className="text-sm text-ink-muted">{t.whatsappNoCode}</p>}
           {step.devCode && (
             <p className="rounded-card bg-status-pending-bg p-4 text-status-pending">
               {t.devCodeNote} <span className="font-mono text-2xl font-bold tracking-widest">{step.devCode}</span>
