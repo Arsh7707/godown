@@ -2,13 +2,42 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { messages, type Lang } from "@/i18n/messages";
+import { messages, type Lang, type Messages } from "@/i18n/messages";
 import type { StockRow } from "@/stock/service";
 import { formatQty } from "@/lib/qty";
+import { fill } from "@/lib/text";
+import { ActionBar, Page } from "@/components/ui/screen";
+import { SearchInput } from "@/components/ui/field";
+import { EmptyState } from "@/components/ui/feedback";
+import { ButtonLink } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icons";
 
 const norm = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, "");
 const signed = (c: number) => (c < 0 ? `−${formatQty(-c)}` : formatQty(c));
 
+/** Below zero or low: a badge with an icon and words, never colour alone. */
+export function StockFlag({ t, r }: { t: Messages; r: { inStock: number; low: boolean } }) {
+  if (r.inStock < 0)
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-status-overdue-bg px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-status-overdue">
+        <Icon name="alert" size={14} strokeWidth={2.4} />
+        {fill(t.ui.stock.shortBadge, { n: formatQty(-r.inStock) })}
+      </span>
+    );
+  if (r.low)
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-status-pending-bg px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-status-pending">
+        <Icon name="alert" size={14} strokeWidth={2.4} />
+        {t.s.low}
+      </span>
+    );
+  return null;
+}
+
+/**
+ * Stock: per item, what is free to sell (big), with what is in the godown and
+ * what is promised to open orders under it.
+ */
 export function StockView({ lang, rows, canEnter, isOwner }: { lang: Lang; rows: StockRow[]; canEnter: boolean; isOwner: boolean }) {
   const t = messages(lang);
   const [q, setQ] = useState("");
@@ -22,83 +51,87 @@ export function StockView({ lang, rows, canEnter, isOwner }: { lang: Lang; rows:
   const lowCount = rows.filter((r) => r.low || r.inStock < 0).length;
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-4">
-      {canEnter && (
-        <div className="grid grid-cols-2 gap-3">
-          <Link href="/stock/in?mode=receipt" className="rounded-2xl bg-[#2e7d4f] px-4 py-4 text-white shadow-sm">
-            <span className="block text-xl font-bold">📥 {t.s.goodsIn}</span>
-            <span className="block text-sm opacity-80">{t.s.goodsInHint}</span>
-          </Link>
-          <Link href="/stock/in?mode=count" className="rounded-2xl bg-[#1f4e79] px-4 py-4 text-white shadow-sm">
-            <span className="block text-xl font-bold">🔢 {t.s.count}</span>
-            <span className="block text-sm opacity-80">{t.s.countHint}</span>
-          </Link>
-        </div>
-      )}
+    <Page>
       <div className="flex gap-2">
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.s.search} className="min-w-0 flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg outline-none focus:border-[#1f4e79]" />
+        <SearchInput className="min-w-0 flex-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.s.search} aria-label={t.s.search} />
         {lowCount > 0 && (
-          <button onClick={() => setLowOnly((v) => !v)} aria-pressed={lowOnly} className={`shrink-0 rounded-xl px-3 font-semibold ${lowOnly ? "bg-red-600 text-white" : "border-2 border-red-300 text-red-700"}`}>
-            ⚠ {lowCount}
+          <button
+            type="button"
+            onClick={() => setLowOnly((v) => !v)}
+            aria-pressed={lowOnly}
+            aria-label={`${lowCount} ${t.ui.stock.lowOnly}`}
+            className={`flex min-h-14 shrink-0 items-center gap-1.5 rounded-control border-2 px-3 font-bold ${lowOnly ? "border-status-overdue bg-status-overdue text-ink-inverse" : "border-status-overdue/40 bg-surface text-status-overdue"}`}
+          >
+            <Icon name="alert" size={20} />
+            {lowCount}
           </button>
         )}
       </div>
-      <p className="text-right text-xs text-stone-400">● {t.s.live}</p>
+      <p className="flex items-center justify-end gap-1.5 text-xs text-ink-subtle">
+        <span className="size-2 rounded-full bg-go" aria-hidden />
+        {t.s.live}
+      </p>
 
-      {groups.length === 0 && <p className="py-16 text-center text-stone-500">{t.s.none}</p>}
-      {groups.map(([product, items]) => (
-        <section key={product} className="overflow-hidden rounded-2xl bg-white shadow-sm">
-          {items.length > 1 || items[0].variant ? <p className="border-b border-stone-100 px-4 pt-3 pb-2 font-bold">{product}</p> : null}
-          <table className="w-full">
-            {(items.length > 1 || items[0].variant) && (
-              <thead className="text-xs text-stone-500">
-                <tr>
-                  <th />
-                  <th className="px-2 text-right font-normal">{t.s.inStock}</th>
-                  <th className="px-2 text-right font-normal">{t.s.owed}</th>
-                  <th className="px-4 text-right font-normal">{t.s.free}</th>
-                </tr>
-              </thead>
-            )}
-            <tbody>
+      {groups.length === 0 && <EmptyState icon="stock" title={t.s.none} />}
+      {groups.map(([product, items]) => {
+        const grouped = items.length > 1 || !!items[0].variant;
+        return (
+          <section key={product} className="overflow-hidden rounded-card bg-surface shadow-card">
+            {grouped && <h2 className="border-b border-line px-4 pt-3 pb-2 font-bold break-words">{product}</h2>}
+            <ul className="divide-y divide-line">
               {items.map((r) => (
-                <tr key={`${r.itemId}|${r.unitCode ?? ""}`} className="border-t border-stone-100 first:border-t-0">
-                  <td className="py-3 pl-4">
-                    <Link href={`/stock/item/${r.itemId}`} className="block font-semibold text-[#1f4e79]">
-                      {r.variant ?? r.name}
-                      {r.unitCode && <span className="font-normal text-stone-500"> · {r.unit}</span>}
-                    </Link>
-                    {!(items.length > 1 || items[0].variant) && (
-                      <span className="text-xs text-stone-500">
-                        {t.s.inStock} {signed(r.inStock)} · {t.s.owed} {formatQty(r.owed)}
+                <li key={`${r.itemId}|${r.unitCode ?? ""}`} data-stock-item={r.name}>
+                  <Link href={`/stock/item/${r.itemId}`} className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-sunken">
+                    <span className="min-w-0 flex-1 space-y-1">
+                      <span className="block font-semibold break-words text-brand">
+                        {grouped ? (r.variant ?? r.name) : r.name}
+                        {r.unitCode && <span className="font-normal text-ink-subtle"> · {r.unit}</span>}
                       </span>
-                    )}
-                  </td>
-                  {(items.length > 1 || items[0].variant) && (
-                    <>
-                      <td className={`px-2 text-right tabular-nums ${r.inStock < 0 ? "font-bold text-red-700" : ""}`}>{signed(r.inStock)}</td>
-                      <td className="px-2 text-right tabular-nums text-stone-600">{formatQty(r.owed)}</td>
-                    </>
-                  )}
-                  <td className="py-3 pr-4 text-right">
-                    <span className={`text-xl font-bold tabular-nums ${r.free < 0 ? "text-red-700" : r.low ? "text-amber-700" : ""}`}>{signed(r.free)}</span>
-                    <span className="block text-xs text-stone-500">
-                      {r.low || r.inStock < 0 ? <b className="text-red-700">⚠ {t.s.low} · </b> : null}
-                      {t.s.free} · {r.unit}
+                      <span className="block text-sm text-ink-muted">
+                        <span data-stock="in" className={`num font-semibold ${r.inStock < 0 ? "text-status-overdue" : "text-ink"}`}>
+                          {signed(r.inStock)}
+                        </span>{" "}
+                        {t.ui.stock.inStockHelp} ·{" "}
+                        <span data-stock="owed" className="num font-semibold text-ink">
+                          {formatQty(r.owed)}
+                        </span>{" "}
+                        {t.ui.stock.owedHelp}
+                      </span>
+                      <StockFlag t={t} r={r} />
                     </span>
-                  </td>
-                </tr>
+                    <span className="shrink-0 text-right">
+                      <span data-stock="free" className={`num block text-2xl leading-tight font-bold ${r.free < 0 ? "text-status-overdue" : "text-ink"}`}>
+                        {signed(r.free)}
+                      </span>
+                      <span className="block text-xs text-ink-subtle">
+                        {r.unit} {t.ui.stock.freeHelp}
+                      </span>
+                    </span>
+                    <Icon name="chevron" size={20} className="text-ink-subtle" />
+                  </Link>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </section>
-      ))}
+            </ul>
+          </section>
+        );
+      })}
 
       {isOwner && (
-        <Link href="/stock/new-product" className="block rounded-2xl border-2 border-dashed border-stone-300 py-4 text-center text-lg font-semibold text-stone-700">
-          + {t.s.newProduct}
-        </Link>
+        <ButtonLink href="/stock/new-product" variant="secondary" size="md" block icon="plus" className="border-dashed">
+          {t.s.newProduct}
+        </ButtonLink>
       )}
-    </main>
+
+      {canEnter && (
+        <ActionBar>
+          <ButtonLink href="/stock/in?mode=count" variant="secondary" size="lg" icon="count" className="flex-1 whitespace-nowrap">
+            {t.s.count}
+          </ButtonLink>
+          <ButtonLink href="/stock/in?mode=receipt" variant="go" size="lg" icon="download" className="flex-1 whitespace-nowrap">
+            {t.s.goodsIn}
+          </ButtonLink>
+        </ActionBar>
+      )}
+    </Page>
   );
 }

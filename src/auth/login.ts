@@ -42,6 +42,30 @@ async function activeMemberships(db: Db, phone: string) {
     .where(and(eq(users.phone, phone), eq(users.active, true)));
 }
 
+/** Digits hidden except the last four; other characters (spaces, hidden marks) kept so they show in a log. */
+const masked = (s: string) => JSON.stringify(s.replace(/\d(?=(?:\D*\d){4})/g, "•"));
+
+/**
+ * For the log when a number isn't found: what was looked up, which users have
+ * the same last 10 digits (and how their number is saved), and which firms this
+ * database holds, so a wrong database or an odd saved number is plain to see.
+ */
+export async function whyNotRegistered(db: Db, input: string): Promise<string> {
+  const phone = normalizePhone(input);
+  const last10 = input.replace(/\D/g, "").slice(-10);
+  const near = await db
+    .select({ phone: users.phone, active: users.active, firm: companies.name })
+    .from(users)
+    .innerJoin(companies, eq(companies.id, users.companyId))
+    .where(sql`regexp_replace(${users.phone}, '\D', '', 'g') like ${"%" + last10}`);
+  const firms = await db.select({ name: companies.name }).from(companies).limit(10);
+  return [
+    `typed ${masked(input)} → looked up ${phone ? masked(phone) : "nothing (not a phone number)"}`,
+    near.length ? `same last 10 digits: ${near.map((u) => `${masked(u.phone)} (${u.active ? "active" : "switched off"}, ${u.firm})`).join("; ")}` : "no user has these last 10 digits",
+    `firms in this database: ${firms.map((f) => f.name).join(", ") || "none"}`,
+  ].join(" | ");
+}
+
 export async function requestCode(
   db: Db,
   provider: OtpProvider,

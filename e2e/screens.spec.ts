@@ -3,39 +3,8 @@
  * checks each one: no crash or server error, nothing wider than the phone,
  * no NaN/undefined on screen, and people only reach what their role allows.
  */
-import { test, expect, expectHealthy, setLanguage, stateFile, type Seed } from "./fixtures";
-import type { RoleName } from "./env";
-
-type Screen = { path: (s: Seed) => string; only?: RoleName[] };
-
-const SCREENS: Screen[] = [
-  { path: () => "/" },
-  { path: () => "/order/new", only: ["owner", "staff"] },
-  { path: () => "/dispatch/new", only: ["owner", "staff"] },
-  { path: () => "/pending" },
-  { path: (s) => `/pending/party/${s.sharma}` },
-  { path: () => "/dispatches" },
-  { path: (s) => `/dispatches/${s.dispatchId}` },
-  { path: (s) => `/orders/${s.orderId}` },
-  { path: () => "/stock" },
-  { path: (s) => `/stock/item/${s.d4012}` },
-  { path: () => "/stock/in", only: ["owner", "staff"] },
-  { path: () => "/stock/new-product", only: ["owner"] },
-  { path: () => "/unmatched" },
-  { path: () => "/history" },
-  { path: () => "/inbox" },
-  { path: () => "/firms" },
-  { path: () => "/reports", only: ["owner", "viewer"] },
-  { path: () => "/activity", only: ["owner"] },
-  { path: () => "/manage", only: ["owner"] },
-  { path: () => "/manage/clients", only: ["owner"] },
-  { path: (s) => `/manage/clients/${s.sharma}`, only: ["owner"] },
-  { path: () => "/manage/items", only: ["owner"] },
-  { path: (s) => `/manage/items/${s.d4012}`, only: ["owner"] },
-  { path: () => "/manage/team", only: ["owner"] },
-  { path: () => "/manage/company", only: ["owner"] },
-  { path: () => "/manage/import", only: ["owner"] },
-];
+import { test, expect, expectHealthy, setLanguage, stateFile } from "./fixtures";
+import { SCREENS } from "./screens";
 
 for (const role of ["owner", "staff", "viewer"] as const) {
   test.describe(`${role}`, () => {
@@ -50,10 +19,11 @@ for (const role of ["owner", "staff", "viewer"] as const) {
             const res = await page.goto(path, { waitUntil: "networkidle" });
             expect(res?.status(), `${path} status`).toBeLessThan(400);
             const landed = new URL(page.url()).pathname;
+            const want = path.split("?")[0];
             if (screen.only && !screen.only.includes(role)) {
-              expect(landed, `${role} must not reach ${path}`).not.toBe(path);
+              expect(landed, `${role} must not reach ${path}`).not.toBe(want);
             } else {
-              expect(landed, `${role} should reach ${path}`).toBe(path);
+              expect(landed, `${role} should reach ${path}`).toBe(want);
             }
             await expectHealthy(page, `${path} (${role}, ${lang})`);
           }
@@ -77,8 +47,12 @@ test("a screen for something that does not exist shows not found, not a crash", 
   const ctx = await browser.newContext({ storageState: stateFile("owner") });
   const page = await ctx.newPage();
   for (const path of ["/orders/00000000-0000-0000-0000-000000000000", "/dispatches/not-a-uuid", "/stock/item/00000000-0000-0000-0000-000000000000", "/manage/clients/abc"]) {
-    const res = await page.goto(path);
-    expect(res?.status(), path).toBe(404);
+    const res = await page.goto(path, { waitUntil: "networkidle" });
+    // Screens stream in (instant loading skeleton), so a missing record can arrive with status 200:
+    // what matters is that it says "not found" and offers the way home, never a server error.
+    expect(res?.status(), path).toBeLessThan(500);
+    await expect(page.getByText("Not found").first(), path).toBeVisible();
+    await expect(page.getByRole("link", { name: "Home" }).first(), path).toBeVisible();
   }
   await ctx.close();
 });

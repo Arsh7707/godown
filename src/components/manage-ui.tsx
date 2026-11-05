@@ -6,9 +6,11 @@ import type { Messages } from "@/i18n/messages";
 import { NetworkError, postJson } from "@/client/api";
 import { errorText } from "./entry/entry-form";
 import { STATE_NAMES } from "@/lib/india";
+import { Icon } from "./ui/icons";
+import { inputClass } from "./ui/field";
 
-export const mfield = "w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg outline-none focus:border-[#1f4e79] disabled:bg-stone-100 disabled:text-stone-500";
-export const mlabel = "block text-sm font-medium text-stone-600";
+export const mfield = inputClass();
+export const mlabel = "block text-sm font-semibold text-ink-muted";
 
 /** Post a Manage action, show its error, refresh the screen. */
 export function useManage(t: Messages) {
@@ -30,7 +32,7 @@ export function useManage(t: Messages) {
       setBusy(false);
     }
   }
-  const message = msg && <p className={`rounded-xl p-3 ${msg.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{msg.text}</p>;
+  const message = msg && <p className={`rounded-control p-3 ${msg.ok ? "bg-go-soft text-go-strong" : "bg-danger-soft text-danger"}`}>{msg.text}</p>;
   return { act, busy, message };
 }
 
@@ -42,10 +44,10 @@ export function AliasEditor({ t, aliases, onAdd, onRemove, busy }: { t: Messages
       <span className={mlabel}>{t.m.extraNames}</span>
       <div className="flex flex-wrap gap-2">
         {aliases.map((a) => (
-          <span key={a.id} className="inline-flex items-center gap-1 rounded-full bg-stone-100 py-1 pl-3 pr-1">
+          <span key={a.id} className="inline-flex items-center gap-1 rounded-full bg-sunken py-1 pl-3 pr-1">
             {a.alias}
-            <button aria-label={`${t.m.delete} ${a.alias}`} disabled={busy} onClick={() => onRemove(a.id)} className="rounded-full px-2 text-lg leading-none text-stone-500">
-              ×
+            <button aria-label={`${t.m.delete} ${a.alias}`} disabled={busy} onClick={() => onRemove(a.id)} className="flex size-12 items-center justify-center rounded-full text-ink-subtle active:bg-line">
+              <Icon name="close" size={18} />
             </button>
           </span>
         ))}
@@ -58,12 +60,12 @@ export function AliasEditor({ t, aliases, onAdd, onRemove, busy }: { t: Messages
             onAdd(v.trim());
             setV("");
           }}
-          className="shrink-0 rounded-xl bg-[#1f4e79] px-5 font-semibold text-white disabled:opacity-40"
+          className="shrink-0 rounded-control bg-brand px-5 font-semibold text-ink-inverse disabled:opacity-40"
         >
           {t.m.addName}
         </button>
       </div>
-      <p className="text-xs text-stone-500">{t.m.extraNamesHint}</p>
+      <p className="text-sm text-ink-subtle">{t.m.extraNamesHint}</p>
     </div>
   );
 }
@@ -72,18 +74,18 @@ export function AliasEditor({ t, aliases, onAdd, onRemove, busy }: { t: Messages
 export function HideDelete({ t, active, canDelete, onToggle, onDelete, busy }: { t: Messages; active: boolean; canDelete: boolean; onToggle: () => void; onDelete: () => void; busy: boolean }) {
   const [sure, setSure] = useState(false);
   return (
-    <div className="space-y-2 border-t border-stone-200 pt-4">
+    <div className="space-y-2 border-t border-line pt-4">
       <div className="flex flex-wrap gap-2">
-        <button disabled={busy} onClick={onToggle} className="rounded-xl border-2 border-stone-300 px-4 py-3 font-semibold">
+        <button disabled={busy} onClick={onToggle} className="rounded-control border-2 border-line-strong px-4 py-3 font-semibold">
           {active ? t.m.hide : t.m.show}
         </button>
         {canDelete && (
-          <button disabled={busy} onClick={() => (sure ? onDelete() : setSure(true))} className={`rounded-xl px-4 py-3 font-semibold ${sure ? "bg-red-600 text-white" : "border-2 border-red-200 text-red-700"}`}>
+          <button disabled={busy} onClick={() => (sure ? onDelete() : setSure(true))} className={`rounded-control px-4 py-3 font-semibold ${sure ? "bg-danger text-ink-inverse" : "border-2 border-danger/30 text-danger"}`}>
             {sure ? t.m.deleteConfirm : t.m.delete}
           </button>
         )}
       </div>
-      <p className="text-xs text-stone-500">
+      <p className="text-sm text-ink-subtle">
         {t.m.hideHint} {canDelete ? "" : t.m.cantDelete}
       </p>
     </div>

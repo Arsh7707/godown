@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { currentFirm, getJson, NetworkError } from "./api";
 
 export interface CatalogParty {
@@ -16,6 +16,9 @@ export interface Catalog {
   items: CatalogItem[];
 }
 
+const EMPTY: Catalog = { parties: [], items: [] };
+const noopSubscribe = () => () => {};
+
 /** One saved copy per firm: firms have different clients (and maybe items). */
 const key = () => `ob_catalog_v1:${currentFirm() ?? ""}`;
 
@@ -30,7 +33,7 @@ function cached(): Catalog | null {
 
 /** Party and item lists for autocomplete. Uses the copy on the phone first, refreshes from the server. */
 export function useCatalog() {
-  // The phone's copy is used straight away (works offline); nothing in the first server render depends on it.
+  // The phone's copy is used straight away (works offline).
   const [catalog, setCatalog] = useState<Catalog>(() => (typeof window === "undefined" ? null : cached()) ?? { parties: [], items: [] });
 
   useEffect(() => {
@@ -50,5 +53,12 @@ export function useCatalog() {
 
   const addParty = useCallback((p: CatalogParty) => setCatalog((c) => ({ ...c, parties: [...c.parties, p] })), []);
   const addItem = useCallback((i: CatalogItem) => setCatalog((c) => ({ ...c, items: [...c.items, i] })), []);
-  return { catalog, addParty, addItem };
+  // While hydrating, render what the server rendered (no phone copy there), then switch to the phone's copy:
+  // a form opened already filled in (dispatch from an order, edits) would otherwise mismatch.
+  const hydrated = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+  return { catalog: hydrated ? catalog : EMPTY, addParty, addItem };
 }

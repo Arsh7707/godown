@@ -23,16 +23,16 @@ export function TeamEditor({ lang, me, team }: { lang: Lang; me: string; team: P
   const t = messages(lang);
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 py-4">
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-3 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
       {team.map((p) =>
         open === p.id ? (
           <PersonForm key={p.id} t={t} person={p} isMe={p.id === me} onClose={() => setOpen(null)} />
         ) : (
-          <button key={p.id} onClick={() => setOpen(p.id)} className={`block w-full rounded-2xl bg-white p-4 text-left shadow-sm active:bg-stone-50 ${p.active ? "" : "opacity-50"}`}>
+          <button key={p.id} onClick={() => setOpen(p.id)} className={`block w-full rounded-card bg-surface p-4 text-left shadow-card active:bg-sunken ${p.active ? "" : "opacity-50"}`}>
             <p className="text-lg font-bold">
-              {p.name} {p.id === me && <span className="text-sm font-normal text-stone-500">({t.m.you})</span>}
+              {p.name} {p.id === me && <span className="text-sm font-normal text-ink-subtle">({t.m.you})</span>}
             </p>
-            <p className="text-sm text-stone-500">
+            <p className="text-sm text-ink-subtle">
               {[formatPhone(p.phone), roleLabel(t, p.role), p.stockKeeper ? `📦 ${t.m.stockKeeper}` : null, [p.city, p.state].filter(Boolean).join(", ") || null, p.active ? null : t.m.noAccess]
                 .filter(Boolean)
                 .join(" · ")}
@@ -43,7 +43,7 @@ export function TeamEditor({ lang, me, team }: { lang: Lang; me: string; team: P
       {open === "new" ? (
         <PersonForm t={t} person={null} isMe={false} onClose={() => setOpen(null)} />
       ) : (
-        <button onClick={() => setOpen("new")} className="w-full rounded-2xl border-2 border-dashed border-stone-300 py-4 text-lg font-semibold text-stone-700">
+        <button onClick={() => setOpen("new")} className="w-full rounded-card border-2 border-dashed border-line-strong py-4 text-lg font-semibold text-ink-muted">
           + {t.m.addPerson}
         </button>
       )}
@@ -61,7 +61,7 @@ function PersonForm({ t, person, isMe, onClose }: { t: Messages; person: Person 
   const { act, busy, message } = useManage(t);
   const fields = { name: name.trim(), phone: phone.trim(), role, city: city.trim() || null, state: state || null, stockKeeper };
   return (
-    <div className="space-y-3 rounded-2xl border-2 border-[#1f4e79]/30 bg-white p-4 shadow-sm">
+    <div className="space-y-3 rounded-card border-2 border-brand/30 bg-surface p-4 shadow-card">
       <label className="block space-y-1.5">
         <span className={mlabel}>{t.m.name}</span>
         <input value={name} onChange={(e) => setName(e.target.value)} className={mfield} />
@@ -81,11 +81,11 @@ function PersonForm({ t, person, isMe, onClose }: { t: Messages; person: Person 
         </select>
       </label>
       <PlaceFields t={t} city={city} state={state} onCity={setCity} onState={setState} />
-      <label className="flex items-start gap-3 rounded-xl bg-stone-50 p-3">
+      <label className="flex items-start gap-3 rounded-control bg-sunken p-3">
         <input type="checkbox" checked={stockKeeper} onChange={(e) => setStockKeeper(e.target.checked)} className="mt-1 size-5" />
         <span>
           <span className="block font-semibold">📦 {t.m.stockKeeper}</span>
-          <span className="block text-sm text-stone-500">{t.m.stockKeeperHint}</span>
+          <span className="block text-sm text-ink-subtle">{t.m.stockKeeperHint}</span>
         </span>
       </label>
       {message}
@@ -93,16 +93,16 @@ function PersonForm({ t, person, isMe, onClose }: { t: Messages; person: Person 
         <button
           disabled={busy || !name.trim() || !phone.trim()}
           onClick={() => act(person ? { action: "user.update", id: person.id, ...fields, ...(isMe ? { role: undefined } : {}) } : { action: "user.add", ...fields }, () => onClose())}
-          className="flex-1 rounded-xl bg-[#2e7d4f] py-3 text-lg font-semibold text-white disabled:opacity-40"
+          className="flex-1 rounded-control bg-go py-3 text-lg font-semibold text-ink-inverse disabled:opacity-40"
         >
           {t.m.save}
         </button>
-        <button onClick={onClose} className="rounded-xl border-2 border-stone-300 px-4 font-semibold">
+        <button onClick={onClose} className="rounded-control border-2 border-line-strong px-4 font-semibold">
           ✕
         </button>
       </div>
       {person && !isMe && (
-        <button disabled={busy} onClick={() => act({ action: "user.update", id: person.id, active: !person.active }, () => onClose())} className="w-full rounded-xl border-2 border-red-200 py-2.5 font-semibold text-red-700">
+        <button disabled={busy} onClick={() => act({ action: "user.update", id: person.id, active: !person.active }, () => onClose())} className="w-full rounded-control border-2 border-danger/30 py-2.5 font-semibold text-danger">
           {person.active ? t.m.removeAccess : t.m.giveAccess}
         </button>
       )}

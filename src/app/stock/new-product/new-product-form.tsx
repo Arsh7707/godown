@@ -6,8 +6,8 @@ import { messages, type Lang } from "@/i18n/messages";
 import { NetworkError, postJson } from "@/client/api";
 import { errorText } from "@/components/entry/entry-form";
 
-const field = "w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg outline-none focus:border-[#1f4e79]";
-const label = "block text-sm font-medium text-stone-600";
+const field = "w-full rounded-control border border-line-strong bg-surface px-4 py-3 text-lg outline-none focus:border-brand";
+const label = "block text-sm font-medium text-ink-muted";
 
 /** A product, optionally in several colours/sizes (one stock line each). */
 export function NewProductForm({ lang }: { lang: Lang }) {
@@ -21,7 +21,7 @@ export function NewProductForm({ lang }: { lang: Lang }) {
   const [busy, setBusy] = useState(false);
   const list = variants.split(/[,،\n]/).map((v) => v.trim()).filter(Boolean);
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-5">
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
       <label className="block space-y-1.5">
         <span className={label}>{t.s.productName}</span>
         <input value={name} onChange={(e) => setName(e.target.value)} className={field} autoFocus />
@@ -34,12 +34,12 @@ export function NewProductForm({ lang }: { lang: Lang }) {
         <span className={label}>{t.s.variants}</span>
         <input value={variants} onChange={(e) => setVariants(e.target.value)} placeholder={t.s.variantsHint} className={field} />
       </label>
-      {name.trim() && list.length > 0 && <p className="text-sm text-stone-600">{list.map((v) => `${name.trim()} · ${v}`).join(", ")}</p>}
+      {name.trim() && list.length > 0 && <p className="text-sm text-ink-muted">{list.map((v) => `${name.trim()} · ${v}`).join(", ")}</p>}
       <label className="block space-y-1.5">
         <span className={label}>{t.s.alertLevel}</span>
         <input inputMode="decimal" value={level} onChange={(e) => setLevel(e.target.value.replace(/[^\d.]/g, ""))} className={field} />
       </label>
-      {err && <p className="rounded-xl bg-red-50 p-3 text-red-800">{err}</p>}
+      {err && <p className="rounded-control bg-danger-soft p-3 text-danger">{err}</p>}
       <button
         disabled={busy || !name.trim()}
         onClick={async () => {
@@ -56,7 +56,7 @@ export function NewProductForm({ lang }: { lang: Lang }) {
             setBusy(false);
           }
         }}
-        className="w-full rounded-xl bg-[#2e7d4f] py-4 text-lg font-semibold text-white disabled:opacity-40"
+        className="w-full rounded-control bg-go py-4 text-lg font-semibold text-ink-inverse disabled:opacity-40"
       >
         {t.s.create}
       </button>

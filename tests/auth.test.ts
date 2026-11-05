@@ -4,7 +4,7 @@ import * as s from "@/db/schema";
 import type { Db } from "@/db/types";
 import { formatPhone, normalizePhone } from "@/lib/phone";
 import { DevOtpProvider } from "@/auth/otp-provider";
-import { MAX_SENDS_PER_HOUR, requestCode, revokeSession, userForToken, verifyCode } from "@/auth/login";
+import { MAX_SENDS_PER_HOUR, requestCode, revokeSession, userForToken, verifyCode, whyNotRegistered } from "@/auth/login";
 import { freshDb, makeCompany } from "./helpers";
 
 describe("phone numbers", () => {
@@ -106,5 +106,15 @@ describe("OTP login", () => {
     await db.update(s.users).set({ active: false }).where(eq(s.users.id, co.owner.userId));
     expect(await userForToken(db, t2)).toBeNull();
     expect(await userForToken(db, "not-a-token")).toBeNull();
+  });
+
+  it("a number not found is explained for the log, digits hidden", async () => {
+    await db.update(s.users).set({ active: false }).where(eq(s.users.phone, OWNER));
+    const why = await whyNotRegistered(db, "98000 00001");
+    expect(why).toContain('looked up "+••••••••0001"');
+    expect(why).toMatch(/same last 10 digits: "\+••••••••0001" \(switched off, Test Textiles\)/);
+    expect(why).toContain("firms in this database: Test Textiles");
+    expect(why).not.toContain("9800");
+    expect(await whyNotRegistered(db, "9999999999")).toContain("no user has these last 10 digits");
   });
 });

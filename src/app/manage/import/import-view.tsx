@@ -71,11 +71,11 @@ function DownloadCard({ t }: { t: Messages }) {
       setBusy(null);
     }
   }
-  const btn = "rounded-xl border-2 border-stone-300 px-3 py-2.5 text-left font-semibold active:bg-stone-100 disabled:opacity-40";
+  const btn = "rounded-control border-2 border-line-strong px-3 py-2.5 text-left font-semibold active:bg-sunken disabled:opacity-40";
   return (
-    <details className="rounded-2xl bg-white p-4 shadow-sm">
+    <details className="rounded-card bg-surface p-4 shadow-card">
       <summary className="cursor-pointer text-lg font-semibold">⬇️ {t.imp.downloadTitle}</summary>
-      <p className="mt-2 text-sm text-stone-500">{t.imp.downloadHint}</p>
+      <p className="mt-2 text-sm text-ink-subtle">{t.imp.downloadHint}</p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button disabled={!!busy} onClick={() => get("clients", false)} className={btn}>
           👥 {t.m.clients}
@@ -90,18 +90,18 @@ function DownloadCard({ t }: { t: Messages }) {
           {t.imp.blank} · {t.imp.itemsStock}
         </button>
       </div>
-      {err && <p className="mt-2 rounded-xl bg-red-50 p-3 text-red-800">{err}</p>}
+      {err && <p className="mt-2 rounded-control bg-danger-soft p-3 text-danger">{err}</p>}
     </details>
   );
 }
 
 const STATUS_STYLE: Record<Status, string> = {
-  new: "bg-emerald-100 text-emerald-900",
-  update: "bg-sky-100 text-sky-900",
-  same: "bg-stone-100 text-stone-600",
-  choose: "bg-amber-100 text-amber-900",
-  skip: "bg-stone-100 text-stone-500",
-  error: "bg-red-100 text-red-800",
+  new: "bg-go-soft text-go-strong",
+  update: "bg-brand-soft text-brand-strong",
+  same: "bg-sunken text-ink-muted",
+  choose: "bg-status-pending-bg text-status-pending",
+  skip: "bg-sunken text-ink-subtle",
+  error: "bg-danger-soft text-danger",
 };
 
 function noteText(t: Messages, n: { code: string; detail?: string }) {
@@ -127,11 +127,11 @@ function PlanCard({
   const showChoices = row.status === "choose" || (decision && decision.action !== "skip") || (row.candidates.length > 0 && row.status === "new");
   const fieldLabel = (f: string) => t.imp.fields[f] ?? f;
   return (
-    <div className={`space-y-2 rounded-2xl bg-white p-4 shadow-sm ${row.status === "choose" ? "ring-2 ring-amber-300" : ""}`}>
+    <div className={`space-y-2 rounded-card bg-surface p-4 shadow-card ${row.status === "choose" ? "ring-2 ring-amber-300" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-lg font-semibold">{row.name}</p>
-          <p className="text-xs text-stone-500">
+          <p className="break-words text-lg font-semibold">{row.name}</p>
+          <p className="text-sm text-ink-subtle">
             {rowsText}
             {row.targetName && row.targetName !== row.name && ` · → ${row.targetName}`}
             {row.matchedBy && ` · ${t.imp.matchedBy[row.matchedBy] ?? row.matchedBy}`}
@@ -139,12 +139,12 @@ function PlanCard({
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_STYLE[row.status]}`}>{t.imp.status[row.status]}</span>
       </div>
-      {row.error && <p className="text-sm text-red-700">{t.imp.errors[row.error] ?? row.error}</p>}
+      {row.error && <p className="text-sm text-danger">{t.imp.errors[row.error] ?? row.error}</p>}
       {row.changes.length > 0 && (
         <ul className="space-y-0.5 text-sm">
           {row.changes.map((c, i) => (
             <li key={i}>
-              <span className="text-stone-500">{fieldLabel(c.field)}:</span> {c.from ? <s className="text-stone-400">{c.from}</s> : null} {c.from ? "→ " : ""}
+              <span className="text-ink-subtle">{fieldLabel(c.field)}:</span> {c.from ? <s className="text-ink-subtle">{c.from}</s> : null} {c.from ? "→ " : ""}
               <b>{c.field === "show" ? t.imp.showAgain : c.to}</b>
             </li>
           ))}
@@ -159,23 +159,23 @@ function PlanCard({
         </p>
       )}
       {row.notes.length > 0 && (
-        <ul className="space-y-0.5 text-xs text-amber-800">
+        <ul className="space-y-0.5 text-xs text-status-pending">
           {row.notes.map((n, i) => (
             <li key={i}>• {noteText(t, n)}</li>
           ))}
         </ul>
       )}
       {canChoose && showChoices && (
-        <div className="space-y-1.5 rounded-xl bg-stone-50 p-2">
-          <p className="px-1 text-sm font-medium text-stone-600">{row.status === "choose" ? t.imp.sameAs : t.imp.maybeSameAs}</p>
+        <div className="space-y-1.5 rounded-control bg-sunken p-2">
+          <p className="px-1 text-sm font-medium text-ink-muted">{row.status === "choose" ? t.imp.sameAs : t.imp.maybeSameAs}</p>
           {row.candidates.map((c) => (
-            <label key={c.id} className="flex items-center gap-3 rounded-lg px-2 py-2 has-[:checked]:bg-white">
+            <label key={c.id} className="flex items-center gap-3 rounded-lg px-2 py-2 has-[:checked]:bg-surface">
               <input type="radio" name={`d${row.rows[0]}`} checked={decision?.action === "match" && decision.id === c.id} onChange={() => onDecide({ action: "match", id: c.id })} className="size-5" />
               <span className="flex-1">{c.name}</span>
-              <span className="text-xs text-stone-400">{Math.round(c.score * 100)}%</span>
+              <span className="text-xs text-ink-subtle">{Math.round(c.score * 100)}%</span>
             </label>
           ))}
-          <label className="flex items-center gap-3 rounded-lg px-2 py-2 has-[:checked]:bg-white">
+          <label className="flex items-center gap-3 rounded-lg px-2 py-2 has-[:checked]:bg-surface">
             <input type="radio" name={`d${row.rows[0]}`} checked={decision?.action === "new"} onChange={() => onDecide({ action: "new" })} className="size-5" />
             <span className="flex-1">{kind === "clients" ? t.imp.newClient : t.imp.newItem}</span>
           </label>
@@ -184,11 +184,11 @@ function PlanCard({
       {canChoose && (
         <div className="flex justify-end gap-3 text-sm">
           {decision && decision.action !== "skip" && (
-            <button onClick={() => onDecide(null)} className="text-stone-500 underline">
+            <button onClick={() => onDecide(null)} className="text-ink-subtle underline">
               {t.imp.undoChoice}
             </button>
           )}
-          <button onClick={() => onDecide(decision?.action === "skip" ? null : { action: "skip" })} className="font-semibold text-stone-600 underline">
+          <button onClick={() => onDecide(decision?.action === "skip" ? null : { action: "skip" })} className="font-semibold text-ink-muted underline">
             {decision?.action === "skip" ? t.imp.include : t.imp.skip}
           </button>
         </div>
@@ -374,8 +374,8 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
 
   if (done)
     return (
-      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-5">
-        <div className="space-y-2 rounded-2xl bg-emerald-50 p-5 text-emerald-950">
+      <main className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
+        <div className="space-y-2 rounded-card bg-go-soft p-5 text-go-strong">
           <p className="text-2xl font-bold">✓ {done.duplicate ? t.imp.alreadyDone : t.imp.done}</p>
           <p>
             {t.imp.created}: <b>{done.created}</b> · {t.imp.updated}: <b>{done.updated}</b>
@@ -387,10 +387,10 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
           )}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Link href={done.kind === "clients" ? "/manage/clients" : "/stock"} className="rounded-xl bg-[#1f4e79] py-3 text-center font-semibold text-white">
+          <Link href={done.kind === "clients" ? "/manage/clients" : "/stock"} className="rounded-control bg-brand py-3 text-center font-semibold text-ink-inverse">
             {done.kind === "clients" ? t.m.clients : t.s.title}
           </Link>
-          <button onClick={reset} className="rounded-xl border-2 border-stone-300 py-3 font-semibold">
+          <button onClick={reset} className="rounded-control border-2 border-line-strong py-3 font-semibold">
             {t.imp.another}
           </button>
         </div>
@@ -398,30 +398,30 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
     );
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-5">
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
       {!sheets && (
         <>
-          <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="space-y-3 rounded-card bg-surface p-4 shadow-card">
             <p className="text-lg font-semibold">📊 {t.imp.pickTitle}</p>
-            <p className="text-sm text-stone-600">{t.imp.pickHint}</p>
+            <p className="text-sm text-ink-muted">{t.imp.pickHint}</p>
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-            <button disabled={busy} onClick={() => fileRef.current?.click()} className="w-full rounded-xl bg-[#1f4e79] py-4 text-lg font-semibold text-white disabled:opacity-40">
+            <button disabled={busy} onClick={() => fileRef.current?.click()} className="w-full rounded-control bg-brand py-4 text-lg font-semibold text-ink-inverse disabled:opacity-40">
               {busy ? "…" : t.imp.chooseFile}
             </button>
-            <p className="text-xs text-stone-500">{t.imp.formats}</p>
+            <p className="text-sm text-ink-subtle">{t.imp.formats}</p>
           </div>
           <DownloadCard t={t} />
         </>
       )}
 
-      {err && <p className="rounded-xl bg-red-50 p-3 text-red-800">{err}</p>}
+      {err && <p className="rounded-control bg-danger-soft p-3 text-danger">{err}</p>}
 
       {sheets && sheet && layout && (
         <>
-          <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="space-y-3 rounded-card bg-surface p-4 shadow-card">
             <div className="flex items-center justify-between gap-2">
-              <p className="min-w-0 truncate font-semibold">📄 {fileName}</p>
-              <button onClick={reset} className="shrink-0 text-sm text-stone-500 underline">
+              <p className="min-w-0 break-words font-semibold">📄 {fileName}</p>
+              <button onClick={reset} className="shrink-0 text-sm text-ink-subtle underline">
                 {t.imp.changeFile}
               </button>
             </div>
@@ -439,12 +439,12 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
             )}
             <div className="grid grid-cols-2 gap-2">
               {(["clients", "items"] as const).map((k) => (
-                <button key={k} onClick={() => setKind(k)} className={`rounded-xl border-2 py-3 font-semibold ${layout.kind === k ? "border-[#1f4e79] bg-[#1f4e79]/10 text-[#1f4e79]" : "border-stone-200"}`}>
+                <button key={k} onClick={() => setKind(k)} className={`rounded-control border-2 py-3 font-semibold ${layout.kind === k ? "border-brand bg-brand-soft text-brand" : "border-line"}`}>
                   {k === "clients" ? `👥 ${t.m.clients}` : `📦 ${t.imp.itemsStock}`}
                 </button>
               ))}
             </div>
-            {layout.kind === "items" && shared && <p className="rounded-xl bg-sky-50 p-2 text-sm text-sky-900">{t.imp.sharedNote}</p>}
+            {layout.kind === "items" && shared && <p className="rounded-control bg-brand-soft p-2 text-sm text-brand-strong">{t.imp.sharedNote}</p>}
             <label className="block space-y-1.5">
               <span className={mlabel}>{t.imp.headerRow}</span>
               <select value={layout.headerRow} onChange={(e) => setHeaderRow(Number(e.target.value))} className={`${mfield} px-2`}>
@@ -458,14 +458,14 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
             </label>
           </div>
 
-          <div className="space-y-2 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="space-y-2 rounded-card bg-surface p-4 shadow-card">
             <p className="font-semibold">{t.imp.columns}</p>
-            <p className="text-xs text-stone-500">{t.imp.columnsHint}</p>
+            <p className="text-sm text-ink-subtle">{t.imp.columnsHint}</p>
             {fields.map((f) => (
               <label key={f} className="flex items-center gap-3">
                 <span className="w-28 shrink-0 text-sm">
                   {t.imp.fields[f]}
-                  {f === nameField && <span className="text-red-600"> *</span>}
+                  {f === nameField && <span className="text-danger"> *</span>}
                 </span>
                 <select
                   value={layout.mapping[f] ?? ""}
@@ -483,9 +483,9 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
               </label>
             ))}
             {records.length > 0 && (
-              <div className="overflow-x-auto rounded-xl border border-stone-200">
+              <div className="overflow-x-auto rounded-control border border-line">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-stone-50 text-stone-500">
+                  <thead className="bg-sunken text-ink-subtle">
                     <tr>
                       <th className="px-2 py-1">#</th>
                       {fields.filter((f) => layout.mapping[f] !== undefined).map((f) => (
@@ -497,10 +497,10 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
                   </thead>
                   <tbody>
                     {records.slice(0, 5).map((r) => (
-                      <tr key={r.rowNo} className="border-t border-stone-100">
-                        <td className="px-2 py-1 text-stone-400">{r.rowNo}</td>
+                      <tr key={r.rowNo} className="border-t border-line">
+                        <td className="px-2 py-1 text-ink-subtle">{r.rowNo}</td>
                         {fields.filter((f) => layout.mapping[f] !== undefined).map((f) => (
-                          <td key={f} className="max-w-32 truncate px-2 py-1">
+                          <td key={f} className="max-w-32 break-words px-2 py-1">
                             {r[f] ?? ""}
                           </td>
                         ))}
@@ -510,18 +510,18 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
                 </table>
               </div>
             )}
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-ink-muted">
               {records.length} {t.imp.rowsFound}
             </p>
           </div>
 
-          <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="space-y-3 rounded-card bg-surface p-4 shadow-card">
             {layout.kind === "items" ? (
               <>
                 <fieldset className="space-y-2">
                   <legend className={mlabel}>{t.imp.stockQ}</legend>
                   {(["set", "add", "none"] as const).map((m) => (
-                    <label key={m} className="flex items-start gap-3 rounded-xl border-2 border-stone-200 p-3 has-[:checked]:border-[#1f4e79]">
+                    <label key={m} className="flex items-start gap-3 rounded-control border-2 border-line p-3 has-[:checked]:border-brand">
                       <input
                         type="radio"
                         name="mode"
@@ -534,12 +534,12 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
                       />
                       <span>
                         <span className="block font-semibold">{t.imp.mode[m]}</span>
-                        <span className="block text-sm text-stone-500">{t.imp.modeHint[m]}</span>
+                        <span className="block text-sm text-ink-subtle">{t.imp.modeHint[m]}</span>
                       </span>
                     </label>
                   ))}
                 </fieldset>
-                {stockMode !== "none" && layout.mapping.qty === undefined && <p className="rounded-xl bg-amber-50 p-2 text-sm text-amber-900">{t.imp.noQtyColumn}</p>}
+                {stockMode !== "none" && layout.mapping.qty === undefined && <p className="rounded-control bg-status-pending-bg p-2 text-sm text-status-pending">{t.imp.noQtyColumn}</p>}
                 <div className="grid grid-cols-2 gap-3">
                   {stockMode !== "none" && (
                     <label className="block space-y-1.5">
@@ -582,24 +582,24 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
                 />
                 <span>
                   <span className="block font-semibold">{t.imp.overwrite}</span>
-                  <span className="block text-sm text-stone-500">{t.imp.overwriteHint}</span>
+                  <span className="block text-sm text-ink-subtle">{t.imp.overwriteHint}</span>
                 </span>
               </label>
             )}
-            {records.length > MAX_ROWS && <p className="rounded-xl bg-red-50 p-2 text-sm text-red-800">{t.imp.tooManyRows}</p>}
+            {records.length > MAX_ROWS && <p className="rounded-control bg-danger-soft p-2 text-sm text-danger">{t.imp.tooManyRows}</p>}
             <button
               disabled={busy || !mappedName || !records.length || records.length > MAX_ROWS}
               onClick={() => preview()}
-              className="w-full rounded-xl bg-[#1f4e79] py-3 text-lg font-semibold text-white disabled:opacity-40"
+              className="w-full rounded-control bg-brand py-3 text-lg font-semibold text-ink-inverse disabled:opacity-40"
             >
               {busy && !plan ? "…" : plan ? t.imp.checkAgain : t.imp.check}
             </button>
-            {!mappedName && <p className="text-sm text-red-700">{t.imp.needName}</p>}
+            {!mappedName && <p className="text-sm text-danger">{t.imp.needName}</p>}
           </div>
 
           {plan && counts && (
             <>
-              <div className="sticky top-[4.5rem] z-[5] space-y-2 rounded-2xl bg-white/95 p-3 shadow-sm backdrop-blur">
+              <div className="sticky top-[4.5rem] z-[5] space-y-2 rounded-card bg-surface/95 p-3 shadow-card backdrop-blur">
                 <div className="flex flex-wrap gap-1.5">
                   {(["all", "choose", "new", "update", "same", "error", "skip"] as const).map((f) => {
                     const n = f === "all" ? plan.rows.length : counts[f];
@@ -611,7 +611,7 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
                           setFilter(f);
                           setShown(PAGE);
                         }}
-                        className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filter === f ? "bg-[#1f4e79] text-white" : f === "all" ? "bg-stone-100" : STATUS_STYLE[f]}`}
+                        className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filter === f ? "bg-brand text-ink-inverse" : f === "all" ? "bg-sunken" : STATUS_STYLE[f]}`}
                       >
                         {f === "all" ? t.imp.all : t.imp.status[f]} {n}
                       </button>
@@ -620,24 +620,24 @@ export function ImportView({ lang, today, shared }: { lang: Lang; today: string;
                 </div>
                 {counts.choose > 0 && (
                   <div className="flex gap-2 text-sm">
-                    <button onClick={acceptSuggestions} className="flex-1 rounded-xl border-2 border-amber-300 py-2 font-semibold text-amber-900">
+                    <button onClick={acceptSuggestions} className="flex-1 rounded-control border-2 border-status-pending/40 py-2 font-semibold text-status-pending">
                       {t.imp.acceptAll}
                     </button>
-                    <button onClick={allNew} className="flex-1 rounded-xl border-2 border-stone-300 py-2 font-semibold">
+                    <button onClick={allNew} className="flex-1 rounded-control border-2 border-line-strong py-2 font-semibold">
                       {t.imp.allNew}
                     </button>
                   </div>
                 )}
-                <button disabled={busy || toSave === 0} onClick={apply} className="w-full rounded-xl bg-[#2e7d4f] py-3 text-lg font-semibold text-white disabled:opacity-40">
+                <button disabled={busy || toSave === 0} onClick={apply} className="w-full rounded-control bg-go py-3 text-lg font-semibold text-ink-inverse disabled:opacity-40">
                   {busy ? "…" : `${t.imp.importN} ${toSave}`}
                 </button>
-                {counts.choose > 0 && <p className="text-xs text-amber-800">{t.imp.chooseLeft.replace("{n}", String(counts.choose))}</p>}
+                {counts.choose > 0 && <p className="text-xs text-status-pending">{t.imp.chooseLeft.replace("{n}", String(counts.choose))}</p>}
               </div>
               {list.slice(0, shown).map((r) => (
                 <PlanCard key={r.rows[0]} t={t} kind={layout.kind} row={r} decision={decisions[r.rows[0]]} onDecide={(d) => decide(r.rows[0], d)} />
               ))}
               {list.length > shown && (
-                <button onClick={() => setShown((s) => s + PAGE)} className="w-full rounded-xl border-2 border-stone-300 py-3 font-semibold">
+                <button onClick={() => setShown((s) => s + PAGE)} className="w-full rounded-control border-2 border-line-strong py-3 font-semibold">
                   {t.imp.more} ({list.length - shown})
                 </button>
               )}

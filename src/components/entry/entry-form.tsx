@@ -12,6 +12,13 @@ import { put as queue } from "@/client/outbox";
 import { Picker } from "./picker";
 import { unitChoices, unitKey, unitLabel } from "@/lib/units";
 import { SourceSummary } from "./source-summary";
+import { fill, words } from "@/lib/text";
+import { Button, IconButton } from "../ui/button";
+import { Field, inputClass } from "../ui/field";
+import { Notice } from "../ui/feedback";
+import { Icon } from "../ui/icons";
+import { ActionBar, Qty } from "../ui/screen";
+import { QtyStepper } from "../ui/stepper";
 import { emptyLine, formComplete, isStock, payload, qtyValid, saveUrl, unitForPick, type EntrySource, type FormKind, type FormState } from "./form-state";
 
 export interface Share {
@@ -27,8 +34,6 @@ export type SaveOutcome = Share | { queued: true; label: string };
 /** New entry, or a correction of an existing order / dispatch. */
 export type FormMode = { type: "create" } | { type: "correctOrder"; orderId: string; baseRev: number } | { type: "correctDispatch"; dispatchId: string; baseRev: number };
 
-const field = "w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg outline-none focus:border-[#1f4e79] focus:ring-2 focus:ring-[#1f4e79]/20";
-const label = "block text-sm font-medium text-stone-600";
 
 export function EntryForm({
   kind,
@@ -58,6 +63,9 @@ export function EntryForm({
   onCancel: () => void;
 }) {
   const [f, setF] = useState<FormState>(initial);
+  // The version the person started editing: a background reload must not swap in a newer
+  // one, or their edit would overwrite someone else's change without the conflict check.
+  const [baseRev] = useState(mode.type === "create" ? null : mode.baseRev);
   const [picker, setPicker] = useState<{ kind: "party" } | { kind: "item"; key: string } | null>(null);
   // Results are tagged with the inputs they were fetched for and shown only while those still match.
   const [planFor, setPlanFor] = useState<{ key: string; plan: DispatchPlan; stock: Record<string, number> } | null>(null);
@@ -68,6 +76,8 @@ export function EntryForm({
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const correcting = mode.type !== "create";
+  // Date, notes, transport…: folded away unless something is already in them (or it is a correction).
+  const [details, setDetails] = useState(() => correcting || !!(initial.promisedDate || initial.notes || initial.takenBy || initial.transport || initial.lrNumber) || (!!initial.date && initial.date !== today));
 
   const party = catalog.parties.find((p) => p.id === f.partyId);
   const itemById = useMemo(() => new Map(catalog.items.map((i) => [i.id, i])), [catalog.items]);
@@ -86,7 +96,6 @@ export function EntryForm({
   if (!f.date) missing.push({ id: "f-date", text: t.e.missDate });
   if (!complete && !missing.length && f.lines[0]) missing.push({ id: `f-item-${f.lines[0].key}`, text: `${t.e.missItem} 1` });
   const isMissing = (id: string) => showMissing && missing.some((m) => m.id === id);
-  const bad = "!border-red-500 !bg-red-50 ring-2 ring-red-200";
   const body = payload(kind, f, source, applyUnmatched);
   const linesKey = JSON.stringify(body.lines);
   const planKey = kind === "dispatch" && complete ? `${f.partyId}|${f.date}|${linesKey}` : null;
@@ -158,7 +167,7 @@ export function EntryForm({
     setBusy(true);
     setError(null);
     const url = mode.type === "correctOrder" ? `/api/orders/${mode.orderId}/correct` : mode.type === "correctDispatch" ? `/api/dispatches/${mode.dispatchId}/correct` : saveUrl(kind);
-    const sendBody = correcting ? { ...body, baseRev: mode.baseRev, reason: reason.trim() || null } : body;
+    const sendBody = correcting ? { ...body, baseRev, reason: reason.trim() || null } : body;
     try {
       const r = await postJson<{ share: Share }>(url, sendBody);
       if (r.ok) onSaved(r.share);
@@ -177,199 +186,230 @@ export function EntryForm({
   }
 
   const pickLine = picker?.kind === "item" ? f.lines.find((l) => l.key === picker.key) : undefined;
+  const itemUnit = (itemId: string) => itemById.get(itemId)?.unit ?? "";
+  const shortText = (s: { itemId: string; unit: string | null | undefined; sending: number; inStock: number }) =>
+    `${itemById.get(s.itemId)?.name}: ${stockPhrase(t, s.inStock, unitLabel(s.unit, itemUnit(s.itemId)))}, ${fill(t.ui.stock.sending, { n: words(formatQty(s.sending), unitLabel(s.unit, itemUnit(s.itemId))) })}`;
+  const added = (itemId: string, unit: string | null) => f.lines.some((l) => l.itemId === itemId && (l.unit ?? null) === unit && l.quantity.trim());
+  const dateLabel = kind === "order" ? t.e.orderDate : kind === "dispatch" ? t.e.dispatchDate : kind === "receipt" ? t.s.receiptDate : t.s.countDate;
+  const pickBtn = (missingNow: boolean, filled: boolean) =>
+    `flex min-h-14 w-full items-center gap-3 rounded-control border-2 px-4 py-3 text-left text-lg ${missingNow ? "border-danger bg-danger-soft" : filled ? "border-line bg-surface" : "border-dashed border-brand/50 bg-brand-soft/60 text-brand-strong"}`;
 
   return (
     <div className="space-y-5">
       {/* Party (stock entries have none) */}
-      <div className={`space-y-1.5 ${isStock(kind) ? "hidden" : ""}`}>
-        <span className={label}>{t.e.party}</span>
-        <button id="f-party" type="button" onClick={() => setPicker({ kind: "party" })} className={`${field} text-left ${party ? "" : "border-amber-400 bg-amber-50 text-amber-900"} ${isMissing("f-party") ? bad : ""}`}>
-          {party ? party.name : f.partyMention ? `“${f.partyMention}” → ${t.e.pickParty}` : t.e.pickParty}
-        </button>
-      </div>
+      {!isStock(kind) && (
+        <div className="space-y-1.5">
+          <span className="block text-sm font-semibold text-ink-muted">{t.e.party}</span>
+          <button id="f-party" type="button" onClick={() => setPicker({ kind: "party" })} className={pickBtn(isMissing("f-party"), !!party)}>
+            <Icon name="user" size={24} className={party ? "text-ink-subtle" : ""} />
+            <span className={`min-w-0 flex-1 break-words ${party ? "font-semibold" : ""}`}>{party ? party.name : f.partyMention ? `“${f.partyMention}” → ${t.e.pickParty}` : t.e.pickParty}</span>
+            <Icon name={party ? "edit" : "chevron"} size={20} className="text-ink-subtle" />
+          </button>
+        </div>
+      )}
 
+      {/* Dispatch: what this party still has pending, one tap to add (full pending amount). */}
       {partyPending.length > 0 && (
-        <div className="space-y-2 rounded-2xl bg-emerald-50 p-3">
-          <p className="text-sm font-medium text-emerald-900">{t.o.fromPending}</p>
-          <div className="flex flex-wrap gap-2">
-            {partyPending.map((p) => (
-              <button key={unitKey(p.itemId, p.unitCode)} type="button" onClick={() => fillFromPending(p.itemId, p.unitCode, p.balance)} className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-base active:bg-emerald-100">
-                {p.itemName} · <b>{formatQty(p.balance)}</b> {p.unit}
-              </button>
-            ))}
+        <div className="space-y-2 rounded-card bg-go-soft p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-go-strong">{t.ui.dispatch.pendingHere}</p>
+            {partyPending.length > 1 && (
+              <Button variant="ghost" size="md" className="shrink-0 whitespace-nowrap text-go-strong" onClick={() => partyPending.forEach((p) => fillFromPending(p.itemId, p.unitCode, p.balance))}>
+                {t.ui.dispatch.addAll}
+              </Button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {partyPending.map((p) => {
+              const on = added(p.itemId, p.unitCode);
+              return (
+                <button
+                  key={unitKey(p.itemId, p.unitCode)}
+                  type="button"
+                  onClick={() => fillFromPending(p.itemId, p.unitCode, p.balance)}
+                  className={`flex min-h-12 w-full items-center gap-3 rounded-control border-2 bg-surface px-3 py-2 text-left ${on ? "border-go" : "border-transparent"}`}
+                >
+                  <Icon name={on ? "checkCircle" : "plus"} size={22} className="text-go" />
+                  <span className="min-w-0 flex-1 break-words">{p.itemName}</span>
+                  <Qty n={formatQty(p.balance)} unit={p.unit} className="font-bold" />
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Items */}
       <div className="space-y-3">
-        {f.lines.map((l) => {
+        {f.lines.map((l, i) => {
           const item = l.itemId ? itemById.get(l.itemId) : undefined;
           const choices = item ? unitChoices(item.unit) : [];
           return (
-            <div key={l.key} className="rounded-2xl border border-stone-200 bg-white p-3">
-              <div className="flex gap-2">
-                <button id={`f-item-${l.key}`} type="button" onClick={() => setPicker({ kind: "item", key: l.key })} className={`${field} min-w-0 flex-1 truncate text-left ${item ? "" : "border-amber-400 bg-amber-50 text-amber-900"} ${isMissing(`f-item-${l.key}`) ? bad : ""}`}>
-                  {item ? item.name : l.mention ? `“${l.mention}” → ${t.e.pickItem}` : t.e.pickItem}
-                </button>
-                <div className="relative w-32 shrink-0">
-                  <input id={`f-qty-${l.key}`} aria-label={t.e.qty} inputMode="decimal" placeholder={kind === "count" ? t.s.counted : t.e.qty} value={l.quantity} onChange={(e) => setLine(l.key, { quantity: e.target.value.replace(/[^\d.]/g, "") })} className={`${field} text-right ${isMissing(`f-qty-${l.key}`) ? bad : ""}`} />
-
-                </div>
+            <div key={l.key} className="space-y-3 rounded-card bg-surface p-3 shadow-card">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-ink-subtle">
+                  {t.e.item} {f.lines.length > 1 ? i + 1 : ""}
+                </span>
+                <span className="flex-1" />
+                {f.lines.length > 1 && (
+                  <IconButton icon="trash" label={`${t.e.removeLine} ${i + 1}`} className="text-ink-subtle" onClick={() => set({ lines: f.lines.filter((x) => x.key !== l.key) })} />
+                )}
               </div>
+              <button id={`f-item-${l.key}`} type="button" onClick={() => setPicker({ kind: "item", key: l.key })} className={pickBtn(isMissing(`f-item-${l.key}`), !!item)}>
+                <Icon name="tag" size={22} className={item ? "text-ink-subtle" : ""} />
+                <span className={`min-w-0 flex-1 break-words ${item ? "font-semibold" : ""}`}>{item ? item.name : l.mention ? `“${l.mention}” → ${t.e.pickItem}` : t.e.pickItem}</span>
+                <Icon name={item ? "edit" : "chevron"} size={20} className="text-ink-subtle" />
+              </button>
+              <QtyStepper
+                id={`f-qty-${l.key}`}
+                label={t.e.qty}
+                placeholder={kind === "count" ? t.s.counted : t.e.qty}
+                value={l.quantity}
+                onChange={(v) => setLine(l.key, { quantity: v })}
+                decLabel={t.ui.decrease}
+                incLabel={t.ui.increase}
+                invalid={isMissing(`f-qty-${l.key}`)}
+              />
               {/* Unit, saved as chosen (no conversion). Preset from what was read or said. */}
-              <div className="mt-2 flex items-center justify-end gap-2">
-                <span className="text-sm text-stone-500">{t.e.unitLabel}</span>
-                <select
-                  aria-label={t.e.unitLabel}
-                  disabled={!item}
-                  value={l.unit ?? ""}
-                  onChange={(e) => setLine(l.key, { unit: e.target.value || null })}
-                  className="min-w-28 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-lg outline-none focus:border-[#1f4e79] disabled:bg-stone-100 disabled:text-stone-400"
-                >
+              <label className="flex items-center justify-end gap-3">
+                <span className="text-sm text-ink-subtle">{t.e.unitLabel}</span>
+                <select aria-label={t.e.unitLabel} disabled={!item} value={l.unit ?? ""} onChange={(e) => setLine(l.key, { unit: e.target.value || null })} className={inputClass(false, "!min-h-12 !w-auto min-w-32 !py-2")}>
                   {item ? choices.map((c) => <option key={c.value ?? ""} value={c.value ?? ""}>{c.label}</option>) : <option value="">{l.unitSaid ?? "—"}</option>}
                 </select>
-              </div>
-              {f.lines.length > 1 && (
-                <button type="button" className="mt-2 text-sm text-stone-500" onClick={() => set({ lines: f.lines.filter((x) => x.key !== l.key) })}>
-                  {t.e.removeLine}
-                </button>
-              )}
+              </label>
             </div>
           );
         })}
-        <button type="button" onClick={() => set({ lines: [...f.lines, emptyLine()] })} className="w-full rounded-xl border-2 border-dashed border-stone-300 py-3 font-semibold text-stone-600">
-          {t.e.addLine}
-        </button>
+        <Button variant="secondary" size="md" block icon="plus" className="border-dashed" onClick={() => set({ lines: [...f.lines, emptyLine()] })}>
+          {t.e.addLine.replace(/^\+\s*/, "")}
+        </Button>
       </div>
-
-      {/* Dates */}
-      <div className="grid grid-cols-1 gap-4">
-        <label className="space-y-1.5">
-          <span className={label}>{kind === "order" ? t.e.orderDate : kind === "dispatch" ? t.e.dispatchDate : kind === "receipt" ? t.s.receiptDate : t.s.countDate}</span>
-          <input id="f-date" type="date" max={today} value={f.date} onChange={(e) => set({ date: e.target.value })} className={`${field} ${isMissing("f-date") ? bad : ""}`} />
-        </label>
-        {kind === "order" && (
-          <label className="space-y-1.5">
-            <span className={label}>{t.e.promisedDate}</span>
-            <input type="date" value={f.promisedDate} onChange={(e) => set({ promisedDate: e.target.value })} className={field} />
-          </label>
-        )}
-      </div>
-
-      {kind === "dispatch" && (
-        <div className="grid grid-cols-1 gap-4">
-          <label className="space-y-1.5">
-            <span className={label}>{t.e.takenBy}</span>
-            <input value={f.takenBy} onChange={(e) => set({ takenBy: e.target.value })} className={field} />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="space-y-1.5">
-              <span className={label}>{t.e.transport}</span>
-              <input value={f.transport} onChange={(e) => set({ transport: e.target.value })} className={field} />
-            </label>
-            <label className="space-y-1.5">
-              <span className={label}>{t.e.lrNumber}</span>
-              <input value={f.lrNumber} onChange={(e) => set({ lrNumber: e.target.value })} className={field} />
-            </label>
-          </div>
-        </div>
-      )}
-
-      <label className="block space-y-1.5">
-        <span className={label}>{t.e.notes}</span>
-        <textarea rows={2} value={f.notes} onChange={(e) => set({ notes: e.target.value })} className={field} />
-      </label>
-
-      {correcting && (
-        <label className="block space-y-1.5">
-          <span className={label}>{t.e.reason}</span>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t.e.reasonHint} className={field} />
-        </label>
-      )}
 
       {plan && <Allocation t={t} plan={plan} itemById={itemById} />}
 
       {shortfalls.length > 0 && (
-        <div className="space-y-1 rounded-2xl border-2 border-red-300 bg-red-50 p-4 text-red-900">
+        <Notice tone="error">
           {shortfalls.map((s) => (
-            <p key={unitKey(s.itemId, s.unit)}>
-              ⚠ {itemById.get(s.itemId)?.name}: {stockPhrase(t, s.inStock)}, {t.s.sendingShort} {formatQty(s.sending)} {unitLabel(s.unit, itemById.get(s.itemId)?.unit ?? "")}
+            <p key={unitKey(s.itemId, s.unit)} className="font-semibold">
+              {shortText(s)}
             </p>
           ))}
           {overStockOk && <p className="text-sm">{t.s.tapAgain}</p>}
-        </div>
+        </Notice>
       )}
 
       {unmatched.length > 0 && (
-        <label className="flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-sky-900">
-          <input type="checkbox" className="mt-1 size-6" checked={applyUnmatched} onChange={(e) => setApplyUnmatched(e.target.checked)} />
+        <label className="flex min-h-12 items-start gap-3 rounded-card bg-brand-soft p-4 text-brand-strong">
+          <input type="checkbox" className="mt-1 size-6 shrink-0 accent-brand" checked={applyUnmatched} onChange={(e) => setApplyUnmatched(e.target.checked)} />
           <span>
-            {t.e.unmatchedOffer} {unmatched.map((u) => `${itemById.get(u.itemId)?.name ?? "?"} ${formatQty(u.quantity)} ${unitLabel(u.unit, itemById.get(u.itemId)?.unit ?? "")}`).join(", ")}. <b>{t.e.applyUnmatched}</b>
+            {t.e.unmatchedOffer} {unmatched.map((u) => words(itemById.get(u.itemId)?.name ?? "?", formatQty(u.quantity), unitLabel(u.unit, itemUnit(u.itemId)))).join(", ")}. <b>{t.e.applyUnmatched}</b>
           </span>
         </label>
       )}
 
+      {/* Dates and the rest: folded away unless needed, so the screen shows only what most entries need. */}
+      <div className="rounded-card bg-surface shadow-card">
+        <button type="button" onClick={() => setDetails((v) => !v)} aria-expanded={details} className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left">
+          <Icon name="calendar" size={22} className="text-ink-subtle" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{f.date === today ? t.ui.today : f.date ? formatDay(f.date, { year: true }) : dateLabel}</span>
+            {!details && <span className="block text-sm text-ink-subtle">{kind === "dispatch" ? t.ui.moreDispatchDetails : isStock(kind) ? dateLabel : t.ui.moreDetails}</span>}
+          </span>
+          <Icon name="down" size={20} className={`text-ink-subtle transition-transform ${details ? "rotate-180" : ""}`} />
+        </button>
+        {details && (
+          <div className="space-y-4 border-t border-line p-4">
+            <Field label={dateLabel} htmlFor="f-date">
+              <input id="f-date" type="date" max={today} value={f.date} onChange={(e) => set({ date: e.target.value })} className={inputClass(isMissing("f-date"))} />
+            </Field>
+            {kind === "order" && (
+              <Field label={t.e.promisedDate} htmlFor="f-promised">
+                <input id="f-promised" type="date" value={f.promisedDate} onChange={(e) => set({ promisedDate: e.target.value })} className={inputClass()} />
+              </Field>
+            )}
+            {kind === "dispatch" && (
+              <>
+                <Field label={t.e.takenBy} htmlFor="f-taken">
+                  <input id="f-taken" value={f.takenBy} onChange={(e) => set({ takenBy: e.target.value })} className={inputClass()} />
+                </Field>
+                <Field label={t.e.transport} htmlFor="f-transport">
+                  <input id="f-transport" value={f.transport} onChange={(e) => set({ transport: e.target.value })} className={inputClass()} />
+                </Field>
+                <Field label={t.e.lrNumber} htmlFor="f-lr">
+                  <input id="f-lr" value={f.lrNumber} onChange={(e) => set({ lrNumber: e.target.value })} className={inputClass()} />
+                </Field>
+              </>
+            )}
+            <Field label={t.e.notes} htmlFor="f-notes">
+              <textarea id="f-notes" rows={3} value={f.notes} onChange={(e) => set({ notes: e.target.value })} className={inputClass(false, "min-h-24")} />
+            </Field>
+          </div>
+        )}
+      </div>
+
+      {correcting && (
+        <Field label={t.e.reason} htmlFor="f-reason">
+          <input id="f-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t.e.reasonHint} className={inputClass()} />
+        </Field>
+      )}
+
       <SourceSummary t={t} summary={source.summaryEn} text={source.sourceText} />
 
-      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-800">{error}</p>}
+      {error && (
+        <Notice tone="error" role="alert">
+          {error}
+        </Notice>
+      )}
 
-      {/* Room so the pinned bar never covers the last field */}
-      <div aria-hidden className="h-32" />
-
-      {/* Save bar pinned to the bottom of the screen. Save is always tappable: if something is
-          still missing it points to it instead of silently doing nothing. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto max-w-md space-y-2 px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
-          {showMissing && missing.length > 0 && (
-            <p role="alert" className="text-sm font-medium text-red-700">
-              {t.e.stillNeeded}: {missing.map((m) => m.text).join(" · ")}
+      {/* Save bar: sticky at the bottom but part of the page, so it never covers the last field.
+          Save is always tappable: if something is still missing it points to it instead of silently doing nothing. */}
+      <ActionBar
+        keepWithKeyboard
+        above={
+          (showMissing && missing.length > 0) || (overStockOk && shortfalls.length > 0) ? (
+            <p role="alert" className="text-sm font-semibold text-danger">
+              {showMissing && missing.length > 0 ? `${t.e.stillNeeded}: ${missing.map((m) => m.text).join(" · ")}` : shortfalls.map(shortText).join(" · ")}
             </p>
-          )}
-          {overStockOk && shortfalls.length > 0 && (
-            <p role="alert" className="text-sm font-medium text-red-700">
-              ⚠{" "}
-              {shortfalls
-                .map((s) => `${itemById.get(s.itemId)?.name}: ${stockPhrase(t, s.inStock)}, ${t.s.sendingShort} ${formatQty(s.sending)}`)
-                .join(" · ")}
-            </p>
-          )}
-          <div className="flex gap-3">
-            <button type="button" onClick={onCancel} className="rounded-xl px-5 py-4 text-lg text-stone-600">
-              {t.e.cancel}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={async () => {
-                if (!complete) {
-                  setShowMissing(true);
-                  if (missing[0]) document.getElementById(missing[0].id)?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  return;
-                }
-                // The stock check loads a moment after typing; a quick tap on Save waits for it
-                // (offline it can't load, and the dispatch is kept on the phone as before).
-                let short = shortfalls;
-                if (planKey && !plan) {
-                  setBusy(true);
-                  const loaded = await loadPlan(planKey);
-                  setBusy(false);
-                  if (loaded) short = shortfallsIn(loaded.stock);
-                }
-                // Sending more than is in stock: allowed, but only after a second tap on the warning.
-                if (short.length && !overStockOk) {
-                  setOverStockOk(true);
-                  return;
-                }
-                save();
-              }}
-              className={`flex-1 rounded-xl px-4 py-4 text-lg font-semibold text-white disabled:opacity-60 ${complete ? "bg-[#2e7d4f]" : "bg-[#2e7d4f]/70"}`}
-            >
-              {busy ? t.e.saving : shortfalls.length && overStockOk ? t.s.sendAnyway : t.e.save}
-            </button>
-          </div>
-        </div>
-      </div>
+          ) : undefined
+        }
+      >
+        <Button variant="secondary" size="lg" onClick={onCancel}>
+          {t.e.cancel}
+        </Button>
+        <Button
+          variant={shortfalls.length && overStockOk ? "destructive" : "go"}
+          size="lg"
+          disabled={busy}
+          className="flex-1"
+          icon={kind === "dispatch" ? "truck" : "check"}
+          onClick={async () => {
+            if (!complete) {
+              setShowMissing(true);
+              const first = missing[0];
+              if (first?.id === "f-date") setDetails(true);
+              if (first) setTimeout(() => document.getElementById(first.id)?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+              return;
+            }
+            // The stock check loads a moment after typing; a quick tap on Save waits for it
+            // (offline it can't load, and the dispatch is kept on the phone as before).
+            let short = shortfalls;
+            if (planKey && !plan) {
+              setBusy(true);
+              const loaded = await loadPlan(planKey);
+              setBusy(false);
+              if (loaded) short = shortfallsIn(loaded.stock);
+            }
+            // Sending more than is in stock: allowed, but only after a second tap on the warning.
+            if (short.length && !overStockOk) {
+              setOverStockOk(true);
+              return;
+            }
+            save();
+          }}
+        >
+          {busy ? t.e.saving : shortfalls.length && overStockOk ? t.s.sendAnyway : t.e.save}
+        </Button>
+      </ActionBar>
 
       {picker?.kind === "party" && (
         <Picker
@@ -403,7 +443,10 @@ export function EntryForm({
           onClose={() => setPicker(null)}
           onPick={(id) => {
             const it = itemById.get(id);
-            setLine(pickLine.key, { itemId: id, unit: it ? unitForPick(pickLine.unitSaid, it.unit) : null });
+            const unit = it ? unitForPick(pickLine.unitSaid, it.unit) : null;
+            // Dispatch: start from everything still pending for this party.
+            const pend = !pickLine.quantity.trim() ? partyPending.find((p) => p.itemId === id && (p.unitCode ?? null) === unit) : undefined;
+            setLine(pickLine.key, { itemId: id, unit, ...(pend ? { quantity: formatQty(pend.balance) } : {}) });
             setPicker(null);
           }}
           onCreate={async (name, unit) => {
@@ -419,10 +462,11 @@ export function EntryForm({
   );
 }
 
-/** "only 5 in stock" / "none in stock (−15)". */
-export function stockPhrase(t: Messages, inStock: number): string {
-  if (inStock > 0) return `${t.s.onlyInStock} ${formatQty(inStock)} ${t.s.inStockWord}`;
-  return `${t.s.noneInStock}${inStock < 0 ? ` (−${formatQty(-inStock)})` : ""}`;
+/** Plain words for what is in stock: "Only 5 pcs in stock", "None in stock", "Stock is already 4 pcs below zero". */
+export function stockPhrase(t: Messages, inStock: number, unit?: string): string {
+  if (inStock > 0) return fill(t.ui.stock.only, { n: words(formatQty(inStock), unit) });
+  if (inStock === 0) return t.ui.stock.none;
+  return fill(t.ui.stock.short, { n: words(formatQty(-inStock), unit) });
 }
 
 /** Rule-violation message, with the number the user needs (e.g. "already sent 10"). */
@@ -432,27 +476,54 @@ export function errorText(t: Messages, code: string, details?: Record<string, un
   return base;
 }
 
+/** Live preview of a dispatch: which orders it fills (oldest first) and what each has left after it. */
 export function Allocation({ t, plan, itemById }: { t: Messages; plan: DispatchPlan; itemById: Map<string, CatalogItem> }) {
-  const fmtDate = (d: string) => formatDay(d);
   return (
-    <div className="space-y-2 rounded-2xl bg-emerald-50 p-4 text-emerald-950">
-      <p className="font-semibold">{t.e.goesTo}</p>
+    <div className="space-y-3 rounded-card bg-surface p-4 shadow-card" aria-live="polite">
+      <p className="flex items-center gap-2 font-bold text-go-strong">
+        <Icon name="truck" size={22} />
+        {t.e.goesTo}
+      </p>
       {plan.lines.map((l, i) => {
         const it = itemById.get(l.itemId);
         const u = unitLabel(l.unit, it?.unit ?? "");
         return (
-          <div key={i} className="text-sm">
-            <p className="font-medium">
-              {it?.name} · {formatQty(l.quantity)} {u}
+          <div key={i} className="space-y-2">
+            <p className="flex flex-wrap items-baseline justify-between gap-x-3">
+              <span className="font-semibold break-words">{it?.name}</span>
+              <span className="text-sm text-ink-muted">
+                {t.ui.dispatch.sendNow} <Qty n={formatQty(l.quantity)} unit={u} className="font-bold text-ink" />
+              </span>
             </p>
             {l.allocations.map((a) => (
-              <p key={a.orderLineId}>
-                → {formatQty(a.quantity)} {u} {t.e.orderOf} {fmtDate(a.orderDate)} · {t.e.balanceAfter} {formatQty(a.balanceAfter)}
-              </p>
+              <div key={a.orderLineId} className="flex items-center gap-3 rounded-control bg-sunken px-3 py-2">
+                <span className="min-w-0 flex-1 text-sm">
+                  <span className="block text-ink-subtle">
+                    {t.p.order} · {formatDay(a.orderDate)}
+                  </span>
+                  <span className="block font-semibold">
+                    <Icon name="arrowRight" size={16} className="inline align-[-2px]" /> <Qty n={formatQty(a.quantity)} unit={u} />
+                  </span>
+                </span>
+                {a.balanceAfter > 0 ? (
+                  <span className="text-right">
+                    <Qty n={formatQty(a.balanceAfter)} unit={u} className="text-lg font-bold" />
+                    <span className="block text-xs text-ink-subtle">{t.ui.dispatch.leftAfter}</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-sm font-semibold text-status-fulfilled">
+                    <Icon name="checkCircle" size={18} />
+                    {t.ui.dispatch.completes}
+                  </span>
+                )}
+              </div>
             ))}
             {l.unmatched > 0 && (
-              <p className="text-amber-800">
-                → {formatQty(l.unmatched)} {u}: {t.e.unmatched}
+              <p className="flex items-start gap-2 rounded-control bg-status-pending-bg px-3 py-2 text-sm text-status-pending">
+                <Icon name="alert" size={18} className="mt-0.5" />
+                <span>
+                  <Qty n={formatQty(l.unmatched)} unit={u} className="font-bold" />: {t.ui.dispatch.noOrder}
+                </span>
               </p>
             )}
           </div>
