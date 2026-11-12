@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { encodeWav, toMono } from "@/lib/wav";
 
 /**
  * Shrinks a camera photo before upload (slow 4G). Long edge 2000px is enough
@@ -41,6 +42,40 @@ export function audioSeconds(blob: Blob): Promise<number> {
     setTimeout(() => done(0), 3000);
     a.src = url;
   });
+}
+
+/** Sarvam reads 30 seconds at a time; longer notes go up as WAV, which the server cuts at pauses. */
+const SPLIT_OVER_SECONDS = 28;
+/** As WAV this is about 4.3 MB, just under what the server accepts in one upload. */
+export const MAX_VOICE_SECONDS = 135;
+
+export class VoiceTooLong extends Error {}
+
+/**
+ * Gets a voice note ready to upload. Short notes go as recorded (small, good
+ * for slow 4G). Long ones become 16 kHz WAV so the server can split them.
+ * If the phone can't decode the file, it goes as it is.
+ */
+export async function voiceForUpload(blob: Blob, seconds: number): Promise<{ blob: Blob; seconds: number }> {
+  if (seconds > MAX_VOICE_SECONDS) throw new VoiceTooLong();
+  if (seconds > 0 && seconds <= SPLIT_OVER_SECONDS) return { blob, seconds };
+  let audio: AudioBuffer;
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    try {
+      audio = await ctx.decodeAudioData(await blob.arrayBuffer());
+    } finally {
+      void ctx.close().catch(() => {});
+    }
+  } catch {
+    return { blob, seconds };
+  }
+  if (audio.duration > MAX_VOICE_SECONDS) throw new VoiceTooLong();
+  if (audio.duration <= SPLIT_OVER_SECONDS) return { blob, seconds: seconds || audio.duration };
+  const channels = Array.from({ length: audio.numberOfChannels }, (_, i) => audio.getChannelData(i));
+  const wav = encodeWav(toMono(channels, audio.sampleRate));
+  return { blob: new Blob([wav.buffer as ArrayBuffer], { type: "audio/wav" }), seconds: audio.duration };
 }
 
 const MAX_SECONDS = 120;

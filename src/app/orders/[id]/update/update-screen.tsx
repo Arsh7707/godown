@@ -5,7 +5,7 @@ import Link from "next/link";
 import { messages, type Lang } from "@/i18n/messages";
 import type { ChangeProposal } from "@/extraction/change";
 import { NetworkError, newId, postJson, upload } from "@/client/api";
-import { useRecorder } from "@/client/media";
+import { useRecorder, voiceForUpload, VoiceTooLong } from "@/client/media";
 import { EditScreen } from "@/components/entry/edit-screen";
 import { CancelButton } from "@/components/order-actions";
 
@@ -53,14 +53,15 @@ export function UpdateScreen(props: {
   );
 
   const onVoice = useCallback(
-    async (blob: Blob, seconds: number) => {
+    async (recorded: Blob, recordedSeconds: number) => {
       setStep({ s: "busy" });
       try {
+        const { blob, seconds } = await voiceForUpload(recorded, recordedSeconds);
         const id = newId();
         const attachmentId = await upload(id, "voice_note", blob);
         await interpret({ audioAttachmentId: attachmentId, audioSeconds: seconds });
       } catch (e) {
-        setError(e instanceof NetworkError ? t.err.NETWORK : t.err.UNKNOWN);
+        setError(e instanceof VoiceTooLong ? t.err.VOICE_TOO_LONG : e instanceof NetworkError ? t.err.NETWORK : t.err.UNKNOWN);
         setStep({ s: "capture" });
       }
     },

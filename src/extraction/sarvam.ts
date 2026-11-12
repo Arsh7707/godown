@@ -4,9 +4,13 @@
  * optionally SARVAM_STT_MODEL (default saaras:v4) and SARVAM_LANGUAGE
  * (default "unknown" = auto-detect; or fix it to hi-IN / pa-IN / en-IN).
  */
+import { splitWav } from "@/lib/wav";
 import { ExtractionError, type Transcriber, type TranscriptResult } from "./types";
 
 const ENDPOINT = "https://api.sarvam.ai/speech-to-text";
+/** Sarvam refuses over 30 seconds per request; the phone sends long notes as WAV so they can be cut. */
+const MAX_PIECE_SECONDS = 28;
+const PARALLEL = 3;
 const MAX_KEYTERMS = 50;
 const MAX_KEYTERM_LENGTH = 64;
 
@@ -18,14 +22,31 @@ export class SarvamTranscriber implements Transcriber {
   ) {}
 
   async transcribe(audio: { data: Buffer; mimeType: string }, opts: { keyterms?: string[]; signal: AbortSignal }): Promise<TranscriptResult> {
-    if (!this.apiKey) throw new ExtractionError("not_configured", "SARVAM_API_KEY is not set");
+    const key = this.apiKey;
+    if (!key) throw new ExtractionError("not_configured", "SARVAM_API_KEY is not set");
+    const terms = cleanKeyterms(opts.keyterms ?? []);
+    const pieces = splitWav(audio.data, MAX_PIECE_SECONDS);
+    if (pieces.length === 1) return this.once(key, audio.data, audio.mimeType, terms, opts.signal);
 
+    // A long note: read the pieces a few at a time, then join them in order.
+    const results: TranscriptResult[] = new Array(pieces.length);
+    let next = 0;
+    const worker = async () => {
+      for (let i = next++; i < pieces.length; i = next++) results[i] = await this.once(key, pieces[i], "audio/wav", terms, opts.signal);
+    };
+    await Promise.all(Array.from({ length: Math.min(PARALLEL, pieces.length) }, worker));
+    return {
+      text: results.map((r) => r.text).filter(Boolean).join(" "),
+      languageCode: results.find((r) => r.languageCode)?.languageCode ?? null,
+    };
+  }
+
+  private async once(key: string, data: Uint8Array, mimeType: string, terms: string[], signal: AbortSignal): Promise<TranscriptResult> {
     const form = new FormData();
-    form.append("file", new Blob([new Uint8Array(audio.data)], { type: audio.mimeType }), `voice.${extFor(audio.mimeType)}`);
+    form.append("file", new Blob([new Uint8Array(data)], { type: mimeType }), `voice.${extFor(mimeType)}`);
     form.append("model", this.model);
     // Users speak Hindi, Punjabi, English or a mix; "unknown" auto-detects per note.
     form.append("language_code", this.languageCode);
-    const terms = cleanKeyterms(opts.keyterms ?? []);
     // keyterms biases recognition toward the company's party and item names (saaras:v4).
     if (terms.length && this.model.startsWith("saaras:v4")) {
       form.append("keyterms", JSON.stringify(terms)); // the API wants one JSON array, not repeated fields
@@ -33,9 +54,9 @@ export class SarvamTranscriber implements Transcriber {
 
     let res: Response;
     try {
-      res = await fetch(ENDPOINT, { method: "POST", headers: { "api-subscription-key": this.apiKey }, body: form, signal: opts.signal });
+      res = await fetch(ENDPOINT, { method: "POST", headers: { "api-subscription-key": key }, body: form, signal });
     } catch (e) {
-      if (opts.signal.aborted) throw new ExtractionError("timeout", "Transcription timed out");
+      if (signal.aborted) throw new ExtractionError("timeout", "Transcription timed out");
       throw new ExtractionError("transcription_failed", e instanceof Error ? e.message : String(e));
     }
     if (!res.ok) {
