@@ -809,6 +809,7 @@ const en = {
     IN_USE: "Already used in orders, dispatches or stock, so it can't be deleted. Hide it instead.",
     UNIT_LOCKED: "The unit can't change after the item has been used",
     UNKNOWN: "Something went wrong. Try again.",
+    VOICE_TOO_LONG: "Voice note is too long. Keep it under 2 minutes, or send it in parts.",
   } as Record<string, string>,
 };
 
@@ -1601,6 +1602,7 @@ const hi: Messages = {
     IN_USE: "ऑर्डर, डिस्पैच या स्टॉक में इस्तेमाल हो चुका है, इसलिए हटा नहीं सकते। छुपा दें।",
     UNIT_LOCKED: "इस्तेमाल होने के बाद यूनिट नहीं बदल सकती",
     UNKNOWN: "कुछ गड़बड़ हुई। फिर कोशिश करें।",
+    VOICE_TOO_LONG: "आवाज़ बहुत लंबी है। 2 मिनट से छोटी रखें, या हिस्सों में भेजें।",
   },
 };
 

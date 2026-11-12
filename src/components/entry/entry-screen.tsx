@@ -11,7 +11,7 @@ import { NetworkError, newId, postJson, upload } from "@/client/api";
 import { useCatalog, type CatalogItem } from "@/client/catalog";
 import { get as outboxGet, put as queue, remove as outboxRemove, useAutoSync } from "@/client/outbox";
 import { clearShared, readShared } from "@/client/shared";
-import { audioSeconds, compressImage, normalizeAudio, useRecorder } from "@/client/media";
+import { audioSeconds, compressImage, normalizeAudio, useRecorder, voiceForUpload } from "@/client/media";
 import { Allocation, EntryForm, stockPhrase, type SaveOutcome } from "./entry-form";
 import { SourceSummary } from "./source-summary";
 import { fill, words } from "@/lib/text";
@@ -223,9 +223,17 @@ export function EntryScreen({
   }
 
   const onVoice = useCallback(
-    async (blob: Blob, seconds: number) => {
+    async (recorded: Blob, recordedSeconds: number) => {
       const captureId = newId();
       setStep({ s: "busy", label: t.e.uploading });
+      let blob = recorded;
+      let seconds = recordedSeconds;
+      try {
+        ({ blob, seconds } = await voiceForUpload(recorded, recordedSeconds));
+      } catch {
+        setError(t.err.VOICE_TOO_LONG);
+        return setStep({ s: "capture" });
+      }
       try {
         const attachmentId = await upload(captureId, "voice_note", blob);
         await read({ captureId, inputMethod: "voice", attachmentId }, { audioAttachmentId: attachmentId, audioSeconds: seconds });

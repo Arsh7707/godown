@@ -4,6 +4,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SarvamTranscriber } from "@/extraction/sarvam";
+import { encodeWav, splitWav } from "@/lib/wav";
 
 /** Answers like Sarvam and hands back the keyterms it was sent. */
 function fakeSarvam() {
@@ -40,5 +41,47 @@ describe("names sent to Sarvam", () => {
 
   it("sends no list when there are no names", async () => {
     expect(await listen(["", " "])).toBeNull();
+  });
+});
+
+describe("long voice notes", () => {
+  /** Each request answers with the piece's length, so the joined text shows the order. */
+  function fakeSarvamByLength() {
+    const calls: { type: string; keyterms: string | null }[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      const form = init.body as FormData;
+      const file = form.get("file") as Blob;
+      calls.push({ type: file.type, keyterms: form.get("keyterms") as string | null });
+      const secs = Math.round((file.size - 44) / 2 / 16_000);
+      await new Promise((r) => setTimeout(r, (30 - secs) * 2)); // later pieces can finish first
+      return new Response(JSON.stringify({ transcript: `part-${secs}s`, language_code: "hi-IN" }), { status: 200 });
+    });
+    return calls;
+  }
+  const sarvam = () => new SarvamTranscriber("KEY", "saaras:v4", "unknown");
+  const wavOf = (secs: number) => Buffer.from(encodeWav(new Float32Array(secs * 16_000).map((_, i) => 0.5 * Math.sin(i / 10))));
+
+  it("sends a long WAV in pieces and joins the text in order", async () => {
+    const calls = fakeSarvamByLength();
+    const data = wavOf(60);
+    const r = await sarvam().transcribe({ data, mimeType: "audio/wav" }, { keyterms: ["Sharma"], signal: AbortSignal.timeout(5000) });
+    const pieces = splitWav(data);
+    expect(pieces).toHaveLength(3);
+    expect(calls).toHaveLength(3);
+    expect(calls.every((c) => c.type === "audio/wav" && c.keyterms === '["Sharma"]')).toBe(true);
+    const expected = pieces.map((p) => `part-${Math.round((p.length - 44) / 2 / 16_000)}s`).join(" ");
+    expect(r).toEqual({ text: expected, languageCode: "hi-IN" });
+  });
+
+  it("sends a short note once, as recorded", async () => {
+    const calls = fakeSarvamByLength();
+    await sarvam().transcribe({ data: wavOf(10), mimeType: "audio/wav" }, { signal: AbortSignal.timeout(5000) });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("fails the note if any piece fails", async () => {
+    let n = 0;
+    vi.stubGlobal("fetch", async () => (++n === 2 ? new Response("busy", { status: 500 }) : new Response(JSON.stringify({ transcript: "x" }))));
+    await expect(sarvam().transcribe({ data: wavOf(60), mimeType: "audio/wav" }, { signal: AbortSignal.timeout(5000) })).rejects.toThrow(/Sarvam 500/);
   });
 });
