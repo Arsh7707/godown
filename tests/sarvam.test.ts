@@ -29,6 +29,30 @@ describe("names sent to Sarvam", () => {
     expect(await listen(["Sharma", "D-4012", "Sharma", "sharma", " SHARMA ", "शर्मा", "शर्मा"])).toEqual(["Sharma", "D-4012", "शर्मा"]);
   });
 
+  it("names that differ only by spaces or punctuation count as one", async () => {
+    expect(await listen(["D-4012", "D 4012", "d4012", "Cotton Poplin · White", "Cotton Poplin White", "---"])).toEqual(["D-4012", "Cotton Poplin · White"]);
+  });
+
+  it("if Sarvam still refuses the names, the note is read without them", async () => {
+    const sent: (string | null)[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      const k = (init.body as FormData).get("keyterms") as string | null;
+      sent.push(k);
+      if (k) return new Response(JSON.stringify({ error: { message: "Keyterms must not contain duplicates." } }), { status: 400 });
+      return new Response(JSON.stringify({ transcript: "दो डब्बे", language_code: "hi-IN" }), { status: 200 });
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const r = await new SarvamTranscriber("KEY", "saaras:v4", "unknown").transcribe({ data: Buffer.from("x"), mimeType: "audio/mp4" }, { keyterms: ["Sharma"], signal: AbortSignal.timeout(1000) });
+    expect(r.text).toBe("दो डब्बे");
+    expect(sent).toEqual(['["Sharma"]', null]);
+    warn.mockRestore();
+  });
+
+  it("other refusals still fail the note", async () => {
+    vi.stubGlobal("fetch", async () => new Response("bad audio", { status: 400 }));
+    await expect(new SarvamTranscriber("KEY", "saaras:v4", "unknown").transcribe({ data: Buffer.from("x"), mimeType: "audio/mp4" }, { keyterms: ["Sharma"], signal: AbortSignal.timeout(1000) })).rejects.toThrow(/Sarvam 400/);
+  });
+
   it("leaves out blanks and names over 64 characters", async () => {
     expect(await listen(["Gupta", "", "   ", "x".repeat(65), "y".repeat(64)])).toEqual(["Gupta", "y".repeat(64)]);
   });
