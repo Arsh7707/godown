@@ -12,6 +12,7 @@ interface Party {
   id: string;
   name: string;
   phone: string | null;
+  address: string | null;
   city: string | null;
   state: string | null;
   taxIdType: "gstin" | "aadhaar" | null;
@@ -26,6 +27,7 @@ export function ClientEditor({ lang, party, canDelete }: { lang: Lang; party: Pa
   const router = useRouter();
   const [name, setName] = useState(party.name);
   const [phone, setPhone] = useState(party.phone ?? "");
+  const [address, setAddress] = useState(party.address ?? "");
   const [city, setCity] = useState(party.city ?? "");
   const [state, setState] = useState(party.state ?? "");
   const [taxType, setTaxType] = useState<TaxType>(party.taxIdType ?? "");
@@ -34,7 +36,7 @@ export function ClientEditor({ lang, party, canDelete }: { lang: Lang; party: Pa
   const [revealed, setRevealed] = useState<string | null>(null);
   const { act, busy, message } = useManage(t);
   const taxChanged = taxType !== (party.taxIdType ?? "") || (taxType === "gstin" && taxId.trim().toUpperCase() !== (party.taxId ?? "")) || (taxType === "aadhaar" && taxId.trim() !== "");
-  const changed = name.trim() !== party.name || phone.trim() !== (party.phone ?? "") || city.trim() !== (party.city ?? "") || state !== (party.state ?? "") || taxChanged;
+  const changed = name.trim() !== party.name || phone.trim() !== (party.phone ?? "") || address.trim() !== (party.address ?? "") || city.trim() !== (party.city ?? "") || state !== (party.state ?? "") || taxChanged;
   const taxReady = !taxChanged || taxType === "" || taxId.trim() !== "";
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">
@@ -46,6 +48,10 @@ export function ClientEditor({ lang, party, canDelete }: { lang: Lang; party: Pa
         <label className="block space-y-1.5">
           <span className={mlabel}>{t.m.phone}</span>
           <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" className={mfield} />
+        </label>
+        <label className="block space-y-1.5">
+          <span className={mlabel}>{t.m.billAddress}</span>
+          <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} className={mfield} />
         </label>
         <PlaceFields t={t} city={city} state={state} onCity={setCity} onState={setState} />
         <div className="space-y-1.5">
@@ -104,6 +110,7 @@ export function ClientEditor({ lang, party, canDelete }: { lang: Lang; party: Pa
               id: party.id,
               name: name.trim(),
               phone: phone.trim(),
+              address: address.trim() || null,
               city: city.trim() || null,
               state: state || null,
               ...(taxChanged ? { taxIdType: taxType || null, taxId: taxType ? taxId.trim() : null } : {}),

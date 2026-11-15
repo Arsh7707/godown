@@ -14,6 +14,7 @@ interface Person {
   city: string | null;
   state: string | null;
   stockKeeper: boolean;
+  supervisor: boolean;
   active: boolean;
 }
 
@@ -33,7 +34,7 @@ export function TeamEditor({ lang, me, team }: { lang: Lang; me: string; team: P
               {p.name} {p.id === me && <span className="text-sm font-normal text-ink-subtle">({t.m.you})</span>}
             </p>
             <p className="text-sm text-ink-subtle">
-              {[formatPhone(p.phone), roleLabel(t, p.role), p.stockKeeper ? `📦 ${t.m.stockKeeper}` : null, [p.city, p.state].filter(Boolean).join(", ") || null, p.active ? null : t.m.noAccess]
+              {[formatPhone(p.phone), roleLabel(t, p.role), p.role === "staff" && p.supervisor ? `🧾 ${t.m.supervisor}` : null, p.stockKeeper ? `📦 ${t.m.stockKeeper}` : null, [p.city, p.state].filter(Boolean).join(", ") || null, p.active ? null : t.m.noAccess]
                 .filter(Boolean)
                 .join(" · ")}
             </p>
@@ -58,8 +59,9 @@ function PersonForm({ t, person, isMe, onClose }: { t: Messages; person: Person 
   const [city, setCity] = useState(person?.city ?? "");
   const [state, setState] = useState(person?.state ?? "");
   const [stockKeeper, setStockKeeper] = useState(person?.stockKeeper ?? false);
+  const [supervisor, setSupervisor] = useState(person?.supervisor ?? false);
   const { act, busy, message } = useManage(t);
-  const fields = { name: name.trim(), phone: phone.trim(), role, city: city.trim() || null, state: state || null, stockKeeper };
+  const fields = { name: name.trim(), phone: phone.trim(), role, city: city.trim() || null, state: state || null, stockKeeper, supervisor: role === "staff" && supervisor };
   return (
     <div className="space-y-3 rounded-card border-2 border-brand/30 bg-surface p-4 shadow-card">
       <label className="block space-y-1.5">
@@ -81,6 +83,15 @@ function PersonForm({ t, person, isMe, onClose }: { t: Messages; person: Person 
         </select>
       </label>
       <PlaceFields t={t} city={city} state={state} onCity={setCity} onState={setState} />
+      {role === "staff" && (
+        <label className="flex items-start gap-3 rounded-control bg-sunken p-3">
+          <input type="checkbox" checked={supervisor} onChange={(e) => setSupervisor(e.target.checked)} className="mt-1 size-5" />
+          <span>
+            <span className="block font-semibold">🧾 {t.m.supervisor}</span>
+            <span className="block text-sm text-ink-subtle">{t.m.supervisorHint}</span>
+          </span>
+        </label>
+      )}
       <label className="flex items-start gap-3 rounded-control bg-sunken p-3">
         <input type="checkbox" checked={stockKeeper} onChange={(e) => setStockKeeper(e.target.checked)} className="mt-1 size-5" />
         <span>

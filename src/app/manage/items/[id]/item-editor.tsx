@@ -7,6 +7,9 @@ import { messages, type Lang } from "@/i18n/messages";
 import { formatQty } from "@/lib/qty";
 import { AliasEditor, HideDelete, mfield, mlabel, useManage } from "@/components/manage-ui";
 
+/** GST rates in use since the 2025 changes (masters/manage.ts GST_RATES). */
+const GST_RATES = [0, 3, 5, 18, 40];
+
 const num = (c: number | null) => (c === null ? "—" : c < 0 ? `−${formatQty(-c)}` : formatQty(c));
 
 interface Item {
@@ -17,6 +20,8 @@ interface Item {
   unit: string;
   active: boolean;
   lowStockLevel: string;
+  hsn: string | null;
+  gstRate: number | null;
   inStock: number | null;
   free: number | null;
   aliases: { id: string; alias: string }[];
@@ -31,6 +36,10 @@ export function ItemEditor({ lang, item, used, siblings }: { lang: Lang; item: I
   const [unit, setUnit] = useState(item.unit);
   const [level, setLevel] = useState(item.lowStockLevel);
   const [newColour, setNewColour] = useState("");
+  const [hsn, setHsn] = useState(item.hsn ?? "");
+  const [gstRate, setGstRate] = useState(item.gstRate === null ? "" : String(item.gstRate));
+  const rates = item.gstRate === null || GST_RATES.includes(item.gstRate) ? GST_RATES : [...GST_RATES, item.gstRate].sort((a, b) => a - b);
+  const taxChanged = hsn.trim() !== (item.hsn ?? "") || gstRate !== (item.gstRate === null ? "" : String(item.gstRate));
   const grouped = siblings > 1 || !!item.variant;
 
   return (
@@ -82,6 +91,39 @@ export function ItemEditor({ lang, item, used, siblings }: { lang: Lang; item: I
           disabled={busy || (unit.trim() === item.unit && level === item.lowStockLevel) || !level}
           onClick={() => act({ action: "item.update", id: item.id, ...(unit.trim() !== item.unit ? { unit: unit.trim() } : {}), lowStockLevel: level })}
           className="col-span-2 rounded-control bg-go py-3 font-semibold text-ink-inverse disabled:opacity-40"
+        >
+          {t.m.save}
+        </button>
+      </div>
+
+      <div className="space-y-3 rounded-card bg-surface p-4 shadow-card">
+        <h2 className="font-bold">🧾 {t.m.gstForBills}</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block space-y-1.5">
+            <span className={mlabel}>{t.m.hsn}</span>
+            <input value={hsn} inputMode="numeric" maxLength={8} onChange={(e) => setHsn(e.target.value.replace(/\D/g, ""))} placeholder="5208" className={mfield} />
+          </label>
+          <label className="block space-y-1.5">
+            <span className={mlabel}>{t.m.gstRate}</span>
+            <select value={gstRate} onChange={(e) => setGstRate(e.target.value)} className={mfield}>
+              <option value="">{t.m.gstRateNone}</option>
+              {rates.map((r) => (
+                <option key={r} value={String(r)}>
+                  {r}%
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {grouped && (
+          <p className="text-sm text-ink-subtle">
+            {t.m.gstSameForAll} {item.product}
+          </p>
+        )}
+        <button
+          disabled={busy || !taxChanged}
+          onClick={() => act({ action: "product.tax", product: item.product, hsn: hsn.trim() || null, gstRate: gstRate || null })}
+          className="w-full rounded-control bg-go py-3 font-semibold text-ink-inverse disabled:opacity-40"
         >
           {t.m.save}
         </button>

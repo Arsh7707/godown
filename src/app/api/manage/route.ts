@@ -10,6 +10,7 @@ import {
   removeItemAlias,
   removePartyAlias,
   renameProduct,
+  setProductTax,
   updateItem,
   updateParty,
 } from "@/masters/manage";
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
           name: typeof b.name === "string" ? b.name : undefined,
           phone: typeof b.phone === "string" ? b.phone : undefined,
           active: typeof b.active === "boolean" ? b.active : undefined,
+          address: opt("address"),
           city: opt("city"),
           state: opt("state"),
           taxIdType: b.taxIdType === "gstin" || b.taxIdType === "aadhaar" || b.taxIdType === null ? b.taxIdType : undefined,
@@ -47,10 +49,22 @@ export async function POST(req: Request) {
       case "party.taxid.reveal":
         return json({ ok: true, taxId: await revealTaxId(db, ctx, s("id")) });
       case "company.update":
-        await updateCompany(db, ctx, { name: opt("name") ?? undefined, city: opt("city"), state: opt("state") });
+        await updateCompany(db, ctx, {
+          name: opt("name") ?? undefined,
+          city: opt("city"),
+          state: opt("state"),
+          gstin: opt("gstin"),
+          address: opt("address"),
+          phone: opt("phone"),
+          bankName: opt("bankName"),
+          bankAccount: opt("bankAccount"),
+          bankIfsc: opt("bankIfsc"),
+          upiId: opt("upiId"),
+          billPrefix: opt("billPrefix"),
+        });
         return json({ ok: true });
       case "user.add": {
-        const u = await addUser(db, ctx, { name: s("name"), phone: s("phone"), role: s("role") as Role, city: opt("city"), state: opt("state"), stockKeeper: flag("stockKeeper") });
+        const u = await addUser(db, ctx, { name: s("name"), phone: s("phone"), role: s("role") as Role, city: opt("city"), state: opt("state"), stockKeeper: flag("stockKeeper"), supervisor: flag("supervisor") });
         return json({ ok: true, id: u.id });
       }
       case "user.update":
@@ -61,6 +75,7 @@ export async function POST(req: Request) {
           city: opt("city"),
           state: opt("state"),
           stockKeeper: flag("stockKeeper"),
+          supervisor: flag("supervisor"),
           active: flag("active"),
         });
         return json({ ok: true });
@@ -91,6 +106,9 @@ export async function POST(req: Request) {
         return json({ ok: true });
       case "item.delete":
         await deleteItem(db, ctx, s("id"));
+        return json({ ok: true });
+      case "product.tax":
+        await setProductTax(db, ctx, s("product"), { hsn: opt("hsn") ?? null, gstRate: opt("gstRate") ?? null });
         return json({ ok: true });
       case "product.rename":
         await renameProduct(db, ctx, s("product"), s("name"));

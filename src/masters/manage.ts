@@ -7,7 +7,7 @@
  * notes using it still match. Anything already used in an order, dispatch or
  * stock entry can be hidden but not deleted.
  */
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db/types";
 import { auditLog, dispatchLines, dispatchRevisions, itemAliases, items, orderLineVersions, orderRevisions, parties, partyAliases, stockMovements } from "@/db/schema";
 import { LedgerError } from "@/lib/errors";
@@ -66,6 +66,7 @@ export async function partiesForManage(db: Db, ctx: Ctx) {
     phone: p.phone,
     city: p.city,
     state: p.state,
+    address: p.address,
     taxIdType: p.taxIdType as "gstin" | "aadhaar" | null,
     /** GSTIN in full, Aadhaar masked. */
     taxId: safeTaxId(p.taxIdType, p.taxId),
@@ -118,7 +119,7 @@ export async function updateParty(db: Db, ctx: Ctx, partyId: string, input: { na
       const [taken] = await tx.select({ id: partyAliases.id }).from(partyAliases).where(and(eq(partyAliases.companyId, ctx.companyId), eq(partyAliases.normalized, normalizeName(before.name))));
       if (!taken) await addAliasRow(tx, ctx, "party", partyId, before.name);
     }
-    const safe = (x: { city?: string | null; state?: string | null; taxIdType?: string | null; taxId?: string | null }) => ({ city: x.city, state: x.state, taxId: safeTaxId(x.taxIdType, x.taxId) });
+    const safe = (x: { address?: string | null; city?: string | null; state?: string | null; taxIdType?: string | null; taxId?: string | null }) => ({ address: x.address, city: x.city, state: x.state, taxId: safeTaxId(x.taxIdType, x.taxId) });
     await log(tx, ctx, "party.update", "party", partyId, {
       before: { name: before.name, phone: before.phone, active: before.active, ...safe(before) },
       after: { name: input.name, phone: input.phone, active: input.active, ...safe({ ...before, ...profile }) },
@@ -174,6 +175,8 @@ export async function itemsForManage(db: Db, ctx: Ctx) {
       unit: i.unit,
       active: i.active,
       lowStockLevel: toCenti(i.lowStockLevel),
+      hsn: i.hsn,
+      gstRate: i.gstRate === null ? null : Number(i.gstRate),
       inStock: st.get(i.id)?.inStock ?? null,
       free: st.get(i.id)?.free ?? null,
       aliases: as.filter((a) => a.itemId === i.id).map((a) => ({ id: a.id, alias: a.alias })),
@@ -235,6 +238,32 @@ export async function updateItem(
 }
 
 /** Rename a product: every colour/size follows ("Vistara · Red" → "Vistara Plus · Red"). */
+/** GST rates in use since the 2025 changes; any rate from 0 to 100 is accepted. */
+export const GST_RATES = [0, 3, 5, 18, 40];
+
+/**
+ * HSN code and GST rate for a whole product (every colour/size gets the
+ * same). Null clears them. Owner only; before/after in the audit log.
+ */
+export async function setProductTax(db: Db, ctx: Ctx, product: string, input: { hsn: string | null; gstRate: string | number | null }) {
+  requireOwner(ctx);
+  const hsn = input.hsn?.replace(/\s+/g, "") || null;
+  if (hsn && !/^(\d{4}|\d{6}|\d{8})$/.test(hsn)) throw new LedgerError("INVALID_HSN", "HSN is 4, 6 or 8 digits");
+  const raw = input.gstRate === null || input.gstRate === "" ? null : String(input.gstRate).trim();
+  if (raw !== null && (!/^\d{1,3}(\.\d{1,2})?$/.test(raw) || Number(raw) > 100)) throw new LedgerError("INVALID_GST_RATE", "GST rate is a percent from 0 to 100");
+  const gstRate = raw === null ? null : String(Number(raw));
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: items.id, name: items.name, product: items.product, hsn: items.hsn, gstRate: items.gstRate })
+      .from(items)
+      .where(eq(items.companyId, stockOf(ctx)));
+    const mine = rows.filter((r) => (r.product ?? r.name) === product);
+    if (!mine.length) throw new LedgerError("NOT_FOUND", "Item not found");
+    await tx.update(items).set({ hsn, gstRate }).where(inArray(items.id, mine.map((r) => r.id)));
+    await log(tx, ctx, "product.tax", "item", mine[0].id, { product, before: { hsn: mine[0].hsn, gstRate: mine[0].gstRate }, after: { hsn, gstRate } });
+  });
+}
+
 export async function renameProduct(db: Db, ctx: Ctx, oldProduct: string, newProduct: string) {
   requireOwner(ctx);
   const np = newProduct.trim();

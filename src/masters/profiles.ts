@@ -40,17 +40,63 @@ function place(input: { city?: string | null; state?: string | null }) {
 
 export async function companyProfile(db: Db, ctx: Ctx) {
   const [c] = await db.select().from(companies).where(eq(companies.id, ctx.companyId));
-  return { name: c.name, city: c.city, state: c.state };
+  return {
+    name: c.name,
+    city: c.city,
+    state: c.state,
+    gstin: c.gstin,
+    address: c.address,
+    phone: c.phone,
+    bankName: c.bankName,
+    bankAccount: c.bankAccount,
+    bankIfsc: c.bankIfsc,
+    upiId: c.upiId,
+    billPrefix: c.billPrefix,
+  };
 }
 
-export async function updateCompany(db: Db, ctx: Ctx, input: { name?: string; city?: string | null; state?: string | null }) {
+export type CompanyInput = Partial<Omit<Awaited<ReturnType<typeof companyProfile>>, "name">> & { name?: string };
+
+const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const UPI = /^[\w.-]+@[a-z][a-z0-9.]+$/i;
+const PREFIX = /^[A-Z0-9]{1,8}$/;
+
+/** Bill details: each is trimmed (empty clears it) and checked; a GSTIN fills in the state when none is set. */
+function billDetails(input: CompanyInput, currentState: string | null) {
+  const out: Record<string, string | null> = {};
+  const text = (k: keyof CompanyInput, clean = (v: string) => v.trim()) => {
+    const v = input[k];
+    if (v !== undefined) out[k] = v === null ? null : clean(v) || null;
+  };
+  text("address");
+  text("phone");
+  text("bankName");
+  text("bankAccount", (v) => v.replace(/\s+/g, ""));
+  text("bankIfsc", (v) => v.replace(/\s+/g, "").toUpperCase());
+  text("upiId", (v) => v.trim().toLowerCase());
+  text("billPrefix", (v) => v.trim().toUpperCase());
+  if (input.gstin !== undefined) {
+    const g = input.gstin?.trim() ? cleanGstin(input.gstin) : null;
+    if (g && !isValidGstin(g)) throw new LedgerError("INVALID_GSTIN", "That GSTIN isn't valid");
+    out.gstin = g;
+    const fromGst = g ? stateForGstin(g) : null;
+    if (fromGst && !(input.state ?? currentState)) out.state = fromGst;
+  }
+  if (out.bankIfsc && !IFSC.test(out.bankIfsc)) throw new LedgerError("INVALID_IFSC", "That IFSC code isn't valid");
+  if (out.upiId && !UPI.test(out.upiId)) throw new LedgerError("INVALID_UPI", "That UPI ID isn't valid");
+  if (out.billPrefix && !PREFIX.test(out.billPrefix)) throw new LedgerError("INVALID_PREFIX", "Use up to 8 letters or numbers");
+  return out;
+}
+
+export async function updateCompany(db: Db, ctx: Ctx, input: CompanyInput) {
   requireOwner(ctx);
   const name = input.name?.trim();
   if (name !== undefined && !name) throw new LedgerError("NAME_REQUIRED", "Name is required");
   const before = await companyProfile(db, ctx);
-  const set = { ...(name ? { name } : {}), ...place(input) };
+  const set = { ...(name ? { name } : {}), ...place(input), ...billDetails(input, before.state) };
   await db.update(companies).set(set).where(eq(companies.id, ctx.companyId));
-  await log(db, ctx, "company.update", "company", ctx.companyId, { before, after: set });
+  const changed = (o: Record<string, unknown>) => Object.fromEntries(Object.keys(set).map((k) => [k, o[k]]));
+  await log(db, ctx, "company.update", "company", ctx.companyId, { before: changed(before), after: set });
 }
 
 // ---------------------------------------------------------------- team
@@ -61,7 +107,7 @@ const ROLES: Role[] = ["owner", "staff", "viewer"];
 export async function teamList(db: Db, ctx: Ctx) {
   requireOwner(ctx);
   return db
-    .select({ id: users.id, name: users.name, phone: users.phone, role: users.role, city: users.city, state: users.state, stockKeeper: users.stockKeeper, active: users.active })
+    .select({ id: users.id, name: users.name, phone: users.phone, role: users.role, city: users.city, state: users.state, stockKeeper: users.stockKeeper, supervisor: users.supervisor, active: users.active })
     .from(users)
     .where(eq(users.companyId, ctx.companyId))
     .orderBy(asc(users.name));
@@ -74,6 +120,8 @@ export interface UserInput {
   city?: string | null;
   state?: string | null;
   stockKeeper?: boolean;
+  /** Staff who can make bills. */
+  supervisor?: boolean;
   active?: boolean;
 }
 
@@ -93,6 +141,7 @@ function checkUser(input: UserInput) {
     out.role = input.role;
   }
   if (input.stockKeeper !== undefined) out.stockKeeper = !!input.stockKeeper;
+  if (input.supervisor !== undefined) out.supervisor = !!input.supervisor;
   if (input.active !== undefined) out.active = !!input.active;
   return out;
 }
@@ -147,6 +196,8 @@ export async function updateUser(db: Db, ctx: Ctx, userId: string, input: UserIn
 // ---------------------------------------------------------------- client profile
 
 export interface PartyProfileInput {
+  /** Billing address; empty or null clears it. */
+  address?: string | null;
   city?: string | null;
   state?: string | null;
   /** null clears the tax ID; undefined leaves it as is. */
@@ -157,6 +208,7 @@ export interface PartyProfileInput {
 /** Validates and cleans a client's place and tax ID. A GSTIN fills in the state when none is given. */
 export function partyProfileSet(input: PartyProfileInput, currentState: string | null) {
   const out: Record<string, string | null> = { ...place(input) };
+  if (input.address !== undefined) out.address = input.address?.trim() || null;
   if (input.taxIdType === undefined) return out;
   if (input.taxIdType === null) return { ...out, taxIdType: null, taxId: null };
   const raw = input.taxId ?? "";

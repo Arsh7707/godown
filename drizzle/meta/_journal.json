@@ -71,6 +71,13 @@
       "when": 1791966018447,
       "tag": "0009_firms",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794739202880,
+      "tag": "0010_billing_setup",
+      "breakpoints": true
     }
   ]
 }
