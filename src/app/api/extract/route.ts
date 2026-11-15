@@ -61,6 +61,7 @@ export async function POST(req: Request) {
       const deps = defaultDeps({ onUsage: (u, model) => usage.push(recordClaudeUsage(user.companyId, user.userId, b.captureId!, u, model)) });
       const [image, audio] = await Promise.all([att(b.imageAttachmentId), att(b.audioAttachmentId)]);
       result = await runExtraction(deps, { kind: b.kind, catalog, text: b.text, image, audio, defaultDate: b.defaultDate && isValidDate(b.defaultDate) ? b.defaultDate : undefined });
+      if (!result.ok) console.warn(`[read] ${b.inputMethod} not read (${result.reason}): ${result.message.slice(0, 300)}`);
       if (audio && b.audioSeconds) usage.push(recordSpeechUsage(user.companyId, user.userId, b.captureId, Math.min(b.audioSeconds, 600)));
       await Promise.all(usage);
     }

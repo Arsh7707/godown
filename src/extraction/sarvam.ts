@@ -61,6 +61,11 @@ export class SarvamTranscriber implements Transcriber {
     }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      // Sarvam has its own idea of a "duplicate" name. Rather than lose the note, read it without the names.
+      if (res.status === 400 && terms.length && /keyterm/i.test(body)) {
+        console.warn(`[voice] Sarvam refused the name list, reading without it: ${body.slice(0, 200)}`);
+        return this.once(key, data, mimeType, [], signal);
+      }
       throw new ExtractionError(res.status === 401 || res.status === 403 ? "not_configured" : "transcription_failed", `Sarvam ${res.status}: ${body.slice(0, 200)}`);
     }
     const json = (await res.json()) as { transcript?: string; language_code?: string | null };
@@ -74,8 +79,9 @@ function cleanKeyterms(keyterms: string[]): string[] {
   return keyterms
     .map((t) => t.trim())
     .filter((t) => {
-      const key = t.normalize("NFKC").toLowerCase();
-      if (!t || t.length > MAX_KEYTERM_LENGTH || seen.has(key)) return false;
+      // "D-4012", "d 4012" and "D4012" are one name.
+      const key = t.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+      if (!key || t.length > MAX_KEYTERM_LENGTH || seen.has(key)) return false;
       seen.add(key);
       return true;
     })
