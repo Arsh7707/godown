@@ -61,6 +61,17 @@ export const companies = pgTable("companies", {
    * its own stock (no chains).
    */
   stockCompanyId: uuid("stock_company_id").references((): AnyPgColumn => companies.id),
+  // For bills: shown at the top, and the GSTIN decides CGST+SGST vs IGST (with `state`).
+  gstin: text("gstin"),
+  address: text("address"),
+  phone: text("phone"),
+  /** Bank and UPI details printed on bills so parties know where to pay. */
+  bankName: text("bank_name"),
+  bankAccount: text("bank_account"),
+  bankIfsc: text("bank_ifsc"),
+  upiId: text("upi_id"),
+  /** Bill numbers start with this, e.g. "SGT" → SGT/25-26/0001. */
+  billPrefix: text("bill_prefix"),
   createdAt: createdAt(),
 });
 
@@ -79,6 +90,8 @@ export const users = pgTable(
     state: text("state"),
     /** Gets the daily "maal add kiya?" reminder. */
     stockKeeper: boolean("stock_keeper").notNull().default(false),
+    /** Staff who can make bills (owners always can). */
+    supervisor: boolean("supervisor").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("users_company_phone_uq").on(t.companyId, t.phone), index("users_phone_idx").on(t.phone)],
@@ -98,6 +111,8 @@ export const parties = pgTable(
     /** "gstin" | "aadhaar" | null. Aadhaar is stored in full but only shown masked (owners can reveal). */
     taxIdType: text("tax_id_type"),
     taxId: text("tax_id"),
+    /** Billing address, printed on bills. */
+    address: text("address"),
     active: boolean("active").notNull().default(true),
     createdBy: createdBy(),
     createdAt: createdAt(),
@@ -138,6 +153,9 @@ export const items = pgTable(
     variant: text("variant"),
     /** Low-stock alert when FREE stock (in stock − owed to pending orders) drops to this. */
     lowStockLevel: numeric("low_stock_level", { precision: 12, scale: 2 }).notNull().default("10"),
+    /** For GST bills: HSN code and GST rate in percent (textiles are mostly 5). */
+    hsn: text("hsn"),
+    gstRate: numeric("gst_rate", { precision: 5, scale: 2 }),
     active: boolean("active").notNull().default(true),
     createdBy: createdBy(),
     createdAt: createdAt(),

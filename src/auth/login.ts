@@ -157,6 +157,8 @@ export interface SessionUser {
   language: "hi" | "en";
   /** Gets the daily "maal add kiya?" reminder. */
   stockKeeper: boolean;
+  /** Staff who can make bills (owners always can). */
+  supervisor: boolean;
   /** Firm whose items and stock this firm uses: its own id unless it shares another firm's godown. */
   stockId: string;
 }
@@ -178,6 +180,7 @@ export async function userForToken(db: Db, token: string, now = new Date()): Pro
       language: users.language,
       active: users.active,
       stockKeeper: users.stockKeeper,
+      supervisor: users.supervisor,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
@@ -198,6 +201,7 @@ export async function userForToken(db: Db, token: string, now = new Date()): Pro
     role: row.role,
     language: row.language,
     stockKeeper: row.stockKeeper,
+    supervisor: row.supervisor,
     stockId: row.stockCompanyId ?? row.companyId,
   };
 }

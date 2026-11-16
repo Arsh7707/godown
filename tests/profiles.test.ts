@@ -105,7 +105,7 @@ describe("client profile", () => {
 describe("company and team", () => {
   it("company name, city and state", async () => {
     await updateCompany(db, co.owner, { name: "Smart Homes Inc.", city: "Ludhiana", state: "Punjab" });
-    expect(await companyProfile(db, co.owner)).toEqual({ name: "Smart Homes Inc.", city: "Ludhiana", state: "Punjab" });
+    expect(await companyProfile(db, co.owner)).toMatchObject({ name: "Smart Homes Inc.", city: "Ludhiana", state: "Punjab" });
     await expect(updateCompany(db, co.owner, { name: " " })).rejects.toMatchObject({ code: "NAME_REQUIRED" });
     await expect(updateCompany(db, co.staff, { city: "X" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
