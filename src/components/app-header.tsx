@@ -20,7 +20,7 @@ export function AppHeader({ companyName, userName, lang, back, title, menu }: { 
     router.refresh();
   }
   return (
-    <header className="sticky top-0 z-30 border-b border-line/70 bg-canvas/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-line/70 bg-canvas/90 pt-[env(safe-area-inset-top)] backdrop-blur-md print:hidden">
       <div className="mx-auto flex min-h-16 max-w-lg items-center gap-1 px-2">
         {back ? (
           <Link href={back} aria-label={t.ui.back} className="flex size-12 shrink-0 items-center justify-center rounded-control text-brand active:bg-brand-soft">

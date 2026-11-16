@@ -43,6 +43,8 @@ export interface Ctx {
   role: Role;
   /** The firm whose items and stock this firm uses (shared godown). Omitted = its own. */
   stockId?: string;
+  /** Staff who can make bills (see billing/service.ts). */
+  supervisor?: boolean;
   /** Injectable clock for tests. */
   now?: Date;
 }

@@ -15,7 +15,7 @@ const TABS: { key: keyof Omit<TabLabels, "nav">; href: string; icon: IconName; m
 ];
 
 /** Full-screen tasks (entering, editing, logging in) hide the tab bar and show their own Save bar. */
-const HIDDEN = [/^\/login/, /^\/order\/new/, /^\/dispatch\/new/, /^\/stock\/in/, /^\/stock\/new-product/, /\/edit$/, /\/update$/, /^\/share/];
+const HIDDEN = [/^\/login/, /^\/b\//, /^\/bills\/new/, /^\/order\/new/, /^\/dispatch\/new/, /^\/stock\/in/, /^\/stock\/new-product/, /\/edit$/, /\/update$/, /^\/share/];
 
 /** Bottom tab bar: the app's main navigation, within thumb reach. */
 export function TabBar({ labels }: { labels: TabLabels }) {
@@ -26,7 +26,7 @@ export function TabBar({ labels }: { labels: TabLabels }) {
   useKeyboardFlag();
   if (HIDDEN.some((r) => r.test(pathname))) return null;
   return (
-    <nav data-tabbar aria-label={labels.nav} className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] shadow-bar backdrop-blur-md">
+    <nav data-tabbar aria-label={labels.nav} className="fixed inset-x-0 bottom-0 z-40 print:hidden border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] shadow-bar backdrop-blur-md">
       <ul className="mx-auto flex h-[var(--tabbar-height)] max-w-lg">
         {TABS.map((tab) => {
           const active = pendingHref ? tab.href === pendingHref : tab.match(pathname);

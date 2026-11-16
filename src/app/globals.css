@@ -190,3 +190,14 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Bills print on plain white A4 with only the bill (app bars and buttons carry print:hidden). */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body {
+    background: white;
+  }
+}

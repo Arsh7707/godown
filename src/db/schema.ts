@@ -556,3 +556,104 @@ export const stockAlertState = pgTable(
   },
   (t) => [uniqueIndex("stock_alert_state_company_key_uq").on(t.companyId, t.key)],
 );
+
+// ---------------------------------------------------------------- bills
+
+export const billKindEnum = pgEnum("bill_kind", ["gst", "kacha"]);
+export const billStatusEnum = pgEnum("bill_status", ["active", "cancelled"]);
+
+/** One bill per dispatch (for now). Like orders, a stable header plus append-only revisions. */
+export const bills = pgTable(
+  "bills",
+  {
+    id: id(),
+    companyId: companyId(),
+    dispatchId: uuid("dispatch_id")
+      .notNull()
+      .references(() => dispatches.id),
+    /** Unguessable, for the link sent to the party (no login needed to view). */
+    shareToken: text("share_token").notNull(),
+    createdBy: createdBy(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("bills_company_dispatch_uq").on(t.companyId, t.dispatchId), uniqueIndex("bills_share_token_uq").on(t.shareToken)],
+);
+
+/**
+ * A bill as saved: the seller and buyer details are copied in, so later
+ * profile changes don't alter a bill already given. A new revision keeps
+ * the number unless the kind changes (GST and kacha are separate series).
+ */
+export const billRevisions = pgTable(
+  "bill_revisions",
+  {
+    id: id(),
+    companyId: companyId(),
+    billId: uuid("bill_id")
+      .notNull()
+      .references(() => bills.id),
+    rev: integer("rev").notNull(),
+    kind: billKindEnum("kind").notNull(),
+    number: text("number").notNull(),
+    billDate: date("bill_date").notNull(),
+    partyId: uuid("party_id")
+      .notNull()
+      .references(() => parties.id),
+    /** { name, address, city, state, gstin, phone } at the time of the bill. */
+    party: jsonb("party").notNull(),
+    /** { name, address, city, state, gstin, phone, bankName, bankAccount, bankIfsc, upiId }. */
+    seller: jsonb("seller").notNull(),
+    interstate: boolean("interstate").notNull(),
+    /** Freight/packing, rupees. */
+    charges: numeric("charges", { precision: 14, scale: 2 }).notNull().default("0"),
+    /** Kept for lists and reports; always recomputed from the lines when saving. */
+    total: numeric("total", { precision: 14, scale: 2 }).notNull(),
+    /** The dispatch revision this bill was made from (shows when the dispatch changed since). */
+    dispatchRev: integer("dispatch_rev").notNull(),
+    notes: text("notes"),
+    status: billStatusEnum("status").notNull(),
+    reason: text("reason"),
+    createdBy: createdBy(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("bill_revisions_bill_rev_uq").on(t.billId, t.rev),
+    index("bill_revisions_company_party_idx").on(t.companyId, t.partyId),
+  ],
+);
+
+export const billLines = pgTable(
+  "bill_lines",
+  {
+    id: id(),
+    companyId: companyId(),
+    billRevisionId: uuid("bill_revision_id")
+      .notNull()
+      .references(() => billRevisions.id),
+    lineNo: integer("line_no").notNull(),
+    itemId: uuid("item_id").references(() => items.id),
+    /** As printed, e.g. "D-4012 Suit · Red". */
+    name: text("name").notNull(),
+    hsn: text("hsn"),
+    quantity: quantity(),
+    unit: text("unit").notNull(),
+    /** Rupees per unit. */
+    rate: numeric("rate", { precision: 14, scale: 2 }).notNull(),
+    discountPct: numeric("discount_pct", { precision: 5, scale: 2 }).notNull().default("0"),
+    gstRate: numeric("gst_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+  },
+  (t) => [index("bill_lines_revision_idx").on(t.billRevisionId), index("bill_lines_company_item_idx").on(t.companyId, t.itemId)],
+);
+
+/** The last number used per firm, series and financial year. Numbers are never reused. */
+export const billCounters = pgTable(
+  "bill_counters",
+  {
+    companyId: companyId(),
+    kind: billKindEnum("kind").notNull(),
+    /** "26-27" */
+    fy: text("fy").notNull(),
+    last: integer("last").notNull(),
+  },
+  (t) => [uniqueIndex("bill_counters_uq").on(t.companyId, t.kind, t.fy)],
+);
