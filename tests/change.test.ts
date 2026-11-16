@@ -96,3 +96,62 @@ describe("model routing for changes", () => {
     await expect(interpretChange({ simple: async () => out({}), complex: async () => out({}) }, { ...input, instruction: "  " }, signal)).rejects.toMatchObject({ reason: "empty_input" });
   });
 });
+
+describe("order change proposal: lines already in the order", () => {
+  const variants: Catalog = {
+    parties: [],
+    items: [
+      { id: "i-red", name: "D-4012 Suit · Red", unit: "pcs", aliases: [] },
+      { id: "i-maroon", name: "D-4012 Suit · Maroon", unit: "pcs", aliases: [] },
+      { id: "i-crown", name: "Crown", unit: "pcs", aliases: [] },
+    ],
+  };
+  const twoColours: CurrentOrder = {
+    partyName: "Sharma",
+    orderDate: "2026-10-08",
+    promisedDate: null,
+    lines: [
+      { orderLineId: "ol-red", itemId: "i-red", itemName: "D-4012 Suit · Red", unit: "pcs", ordered: 4000, sent: 0 },
+      { orderLineId: "ol-maroon", itemId: "i-maroon", itemName: "D-4012 Suit · Maroon", unit: "pcs", ordered: 3000, sent: 1000 },
+    ],
+  };
+
+  it("names exactly as in the order keep their line, even when names look alike", () => {
+    const p = buildProposal(out({ lines: [{ item: name("D-4012 Suit · Red"), quantity: 45, unit: null }, { item: name("D-4012 Suit · Maroon"), quantity: 30, unit: null }] }), twoColours, variants, "red 45 kar do");
+    expect(p.lines.map((l) => [l.orderLineId, l.itemId, l.quantity])).toEqual([
+      ["ol-red", "i-red", "45"],
+      ["ol-maroon", "i-maroon", "30"],
+    ]);
+    expect(p.changes).toEqual([{ itemName: "D-4012 Suit · Red", before: "40 pcs", after: "45 pcs" }]);
+  });
+
+  it("the same item in two units keeps both lines, each in its own unit", () => {
+    const crownTwice: CurrentOrder = {
+      ...twoColours,
+      lines: [
+        { orderLineId: "ol-pcs", itemId: "i-crown", itemName: "Crown", unit: "pcs", unitCode: null, ordered: 2000, sent: 0 },
+        { orderLineId: "ol-dabba", itemId: "i-crown", itemName: "Crown", unit: "dabba", unitCode: "dabba", ordered: 500, sent: 200 },
+      ],
+    };
+    const p = buildProposal(out({ lines: [{ item: name("Crown"), quantity: 6, unit: "dabba" }, { item: name("Crown"), quantity: 25, unit: null }] }), crownTwice, variants, "dabbe 6 kar do");
+    expect(p.lines.map((l) => [l.orderLineId, l.quantity, l.unit])).toEqual([
+      ["ol-dabba", "6", "dabba"],
+      ["ol-pcs", "25", null],
+    ]);
+  });
+
+  it("zero for an item: dropped if nothing was sent, closed at what was sent otherwise", () => {
+    const p = buildProposal(out({ lines: [{ item: name("D-4012 Suit · Red"), quantity: 0, unit: null }, { item: name("D-4012 Suit · Maroon"), quantity: 0, unit: null }] }), twoColours, variants, "baaki nahi chahiye");
+    expect(p.lines.map((l) => [l.orderLineId, l.quantity])).toEqual([["ol-maroon", "10"]]);
+    expect(p.changes).toEqual([
+      { itemName: "D-4012 Suit · Red", before: "40 pcs", after: null },
+      { itemName: "D-4012 Suit · Maroon", before: "30 pcs", after: "10 pcs" },
+    ]);
+  });
+
+  it("an order line is used once, even if the model repeats it", () => {
+    const p = buildProposal(out({ lines: [{ item: name("D-4012 Suit · Red"), quantity: 45, unit: null }, { item: name("D-4012 Suit · Red"), quantity: 5, unit: null }, { item: name("D-4012 Suit · Maroon"), quantity: 30, unit: null }] }), twoColours, variants, "...");
+    const ids = p.lines.map((l) => l.orderLineId).filter(Boolean);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});

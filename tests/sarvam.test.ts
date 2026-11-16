@@ -105,7 +105,50 @@ describe("long voice notes", () => {
 
   it("fails the note if any piece fails", async () => {
     let n = 0;
-    vi.stubGlobal("fetch", async () => (++n === 2 ? new Response("busy", { status: 500 }) : new Response(JSON.stringify({ transcript: "x" }))));
-    await expect(sarvam().transcribe({ data: wavOf(60), mimeType: "audio/wav" }, { signal: AbortSignal.timeout(5000) })).rejects.toThrow(/Sarvam 500/);
+    vi.stubGlobal("fetch", async () => (++n === 2 ? new Response("bad audio", { status: 400 }) : new Response(JSON.stringify({ transcript: "x" }))));
+    await expect(sarvam().transcribe({ data: wavOf(60), mimeType: "audio/wav" }, { signal: AbortSignal.timeout(5000) })).rejects.toThrow(/Sarvam 400/);
+  });
+});
+
+describe("when Sarvam is busy or the connection drops", () => {
+  const read = () => new SarvamTranscriber("KEY", "saaras:v4", "unknown").transcribe({ data: Buffer.from("x"), mimeType: "audio/mp4" }, { keyterms: ["Sharma"], signal: AbortSignal.timeout(5000) });
+  const ok = () => new Response(JSON.stringify({ transcript: "दो डब्बे", language_code: "hi-IN" }), { status: 200 });
+
+  it.each([429, 500, 502, 503, 504])("tries once more after %i", async (status) => {
+    let n = 0;
+    vi.stubGlobal("fetch", async () => (++n === 1 ? new Response("busy", { status }) : ok()));
+    expect((await read()).text).toBe("दो डब्बे");
+    expect(n).toBe(2);
+  });
+
+  it("tries once more after a dropped connection", async () => {
+    let n = 0;
+    vi.stubGlobal("fetch", async () => {
+      if (++n === 1) throw new TypeError("fetch failed");
+      return ok();
+    });
+    expect((await read()).text).toBe("दो डब्बे");
+    expect(n).toBe(2);
+  });
+
+  it("gives up after the second try, saying why", async () => {
+    let n = 0;
+    vi.stubGlobal("fetch", async () => (n++, new Response("overloaded", { status: 503 })));
+    await expect(read()).rejects.toMatchObject({ reason: "transcription_failed", message: expect.stringMatching(/Sarvam 503/) });
+    expect(n).toBe(2);
+  });
+
+  it("a wrong key or no credit is the owner's to fix, and isn't retried", async () => {
+    for (const status of [401, 402, 403]) {
+      let n = 0;
+      vi.stubGlobal("fetch", async () => (n++, new Response("no credits", { status })));
+      await expect(read()).rejects.toMatchObject({ reason: "not_configured" });
+      expect(n).toBe(1);
+    }
+  });
+
+  it("a reply that isn't JSON is a clear failure, not a crash", async () => {
+    vi.stubGlobal("fetch", async () => new Response("<html>gateway</html>", { status: 200 }));
+    await expect(read()).rejects.toMatchObject({ reason: "transcription_failed" });
   });
 });

@@ -8,6 +8,8 @@ import { NetworkError, newId, postJson, upload } from "@/client/api";
 import { useRecorder, voiceForUpload, VoiceTooLong } from "@/client/media";
 import { EditScreen } from "@/components/entry/edit-screen";
 import { CancelButton } from "@/components/order-actions";
+import { readFailedText } from "@/components/entry/entry-screen";
+import { TaskHeader } from "@/components/entry/task-header";
 
 type Step = { s: "capture" } | { s: "busy" } | { s: "proposal"; p: ChangeProposal; rev: number };
 
@@ -36,7 +38,8 @@ export function UpdateScreen(props: {
       try {
         const r = await postJson<{ proposal: ChangeProposal; rev: number }>(`/api/orders/${props.orderId}/interpret`, { captureId: newId(), ...body });
         if (!r.ok) {
-          setError(r.code === "EMPTY" ? t.o.noChange : (t.err[r.code] ?? t.e.readFailed));
+          const why = r as { reason?: string; message?: string };
+          setError(r.code === "EMPTY" ? t.o.noChange : r.code === "READ_FAILED" ? readFailedText(t, why.reason ?? "", why.message ?? "") : (t.err[r.code] ?? t.e.readFailed));
           return setStep({ s: "capture" });
         }
         if (!r.proposal.understood) {
@@ -160,7 +163,7 @@ export function UpdateScreen(props: {
           </button>
           {state === "tooShort" && <p className="text-center text-ink-muted">{t.e.holdLonger}</p>}
           {state === "blocked" && <p className="rounded-control bg-danger-soft p-3 text-danger">{t.e.micBlocked}</p>}
-          <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={t.e.type} className="w-full rounded-card border border-line-strong bg-surface p-4 text-lg outline-none focus:border-brand" />
+          <textarea rows={3} aria-label={t.e.type} value={text} onChange={(e) => setText(e.target.value)} placeholder={t.e.type} className="w-full rounded-card border border-line-strong bg-surface p-4 text-lg outline-none focus:border-brand" />
           <button disabled={!text.trim()} onClick={() => interpret({ text: text.trim() })} className="w-full rounded-control bg-brand py-4 text-lg font-semibold text-ink-inverse disabled:opacity-40">
             {t.e.readIt}
           </button>
@@ -173,14 +176,7 @@ export function UpdateScreen(props: {
 function Shell({ title, back, t, children }: { title: string; back: string; t: ReturnType<typeof messages>; children: React.ReactNode }) {
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur">
-        <div className="mx-auto flex max-w-lg items-center gap-2">
-          <Link href={back} className="-ml-2 rounded-lg px-2 py-1 text-3xl leading-none text-brand" aria-label={t.e.back}>
-            ‹
-          </Link>
-          <h1 className="break-words text-xl font-bold text-brand">{title}</h1>
-        </div>
-      </header>
+      <TaskHeader title={title} back={back} backLabel={t.ui.back} />
       <main className="mx-auto w-full max-w-lg flex-1 px-4 pt-4 pb-[calc(var(--tabbar-space)+1.5rem)]">{children}</main>
     </>
   );

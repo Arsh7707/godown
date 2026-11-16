@@ -93,11 +93,15 @@ export function EntryScreen({
       entryIndex: null,
     });
 
+  /** The capture that could not be read, so "Try again" can send it once more. */
+  const [retry, setRetry] = useState<{ capture: Capture; body: Record<string, unknown> } | null>(null);
+
   /** Send a capture for reading; on any failure drop into the form with what was captured. */
   const read = useCallback(
     async (capture: Capture, body: Record<string, unknown>) => {
       setStep({ s: "busy", label: capture.inputMethod === "voice" ? t.e.readingVoice : t.e.reading });
       setError(null);
+      setRetry(null);
       let result: ExtractionResult;
       try {
         const r = await postJson<{ result: ExtractionResult }>("/api/extract", { captureId: capture.captureId, kind: extractionKind(kind), inputMethod: capture.inputMethod, defaultDate: day, ...body });
@@ -109,6 +113,7 @@ export function EntryScreen({
           return;
         }
         setError(t.e.readFailed);
+        setRetry({ capture, body });
         setStep({
           s: "form",
           initial: emptyForm(startDate),
@@ -120,7 +125,8 @@ export function EntryScreen({
         return;
       }
       if (!result.ok) {
-        setError(t.e.readFailed);
+        setError(readFailedText(t, result.reason, result.message));
+        setRetry({ capture, body });
         setStep({
           s: "form",
           initial: { ...emptyForm(startDate), notes: "" },
@@ -356,10 +362,15 @@ export function EntryScreen({
       <Shell t={t} title={title} back={day ? `/history?date=${day}` : isStock(kind) ? "/stock" : "/"}>
         {photoBar}
         {error && (
-          <div className="mb-4">
+          <div className="mb-4 space-y-2">
             <Notice tone="warn" role="alert">
               {error}
             </Notice>
+            {retry && (
+              <Button variant="secondary" block icon="undo" onClick={() => read(retry.capture, retry.body)}>
+                {t.e.tryAgain}
+              </Button>
+            )}
           </div>
         )}
         {step.back?.s === "review" && step.entryIndex !== null && step.back.result.entries.length > 1 && (
@@ -878,4 +889,13 @@ function UnmatchedHint({ t, partyId, itemIds, onEdit }: { t: Messages; partyId: 
       <Icon name="chevron" size={16} />
     </button>
   );
+}
+
+/** Why a capture couldn't be read, in words the person can act on. */
+export function readFailedText(t: Messages, reason: string, message: string): string {
+  if (reason === "timeout") return t.e.readTimeout;
+  if (reason === "not_configured") return t.e.readNotConfigured;
+  if (/^Daily AI limit/.test(message)) return t.e.readLimit;
+  if (reason === "empty_input" || /Could not hear anything/.test(message)) return t.e.readNothingHeard;
+  return t.e.readFailed;
 }

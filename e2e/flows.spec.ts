@@ -114,6 +114,25 @@ test.describe("staff at work", () => {
   });
 });
 
+test.describe("reading fails", () => {
+  test.use({ storageState: stateFile("staff") });
+
+  // The test server has no AI keys, so every reading fails the way a real outage would.
+  test("says why it couldn't read, keeps what was typed, and offers Try again", async ({ page }) => {
+    await page.goto("/order/new", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /Type/ }).click();
+    await page.getByRole("textbox", { name: "Type" }).fill("Sharma ji 5 piece D-4012");
+    await page.getByRole("button", { name: "Read it" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "isn't working right now" })).toBeVisible();
+    const again = page.getByRole("button", { name: "Try again" });
+    await expect(again).toBeVisible();
+    await again.click();
+    await expect(page.getByRole("alert").filter({ hasText: "isn't working right now" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pick party" })).toBeVisible();
+    await expectHealthy(page);
+  });
+});
+
 test.describe("owner checks", () => {
   test.use({ storageState: stateFile("owner") });
 
