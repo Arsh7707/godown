@@ -77,7 +77,8 @@ async function audit(page: Page): Promise<Problem[]> {
       }
       if ((s.overflow === "hidden" || s.overflowY === "hidden") && el.scrollHeight > el.clientHeight + 2 && el.clientHeight > 0) out.push({ rule: "text clipped", what: `"${text.slice(0, 40)}"` });
     }
-    const all = document.body.innerText;
+    // GSTINs (on bills) are letters and digits by design.
+    const all = document.body.innerText.replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/g, "");
     const glued = all.match(/[a-zऀ-ॿ]{3,}\d+|\d+(?:pcs|mtr|kg|nag|dabba|than|thaan)\b/gi);
     if (glued) for (const g of new Set(glued)) out.push({ rule: "word glued to number", what: g });
     return out;

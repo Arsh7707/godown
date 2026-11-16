@@ -78,6 +78,13 @@
       "when": 1794739202880,
       "tag": "0010_billing_setup",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794739917529,
+      "tag": "0011_bills",
+      "breakpoints": true
     }
   ]
 }

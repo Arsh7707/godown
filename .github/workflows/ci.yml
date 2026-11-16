@@ -84,7 +84,7 @@ jobs:
 
   browser:
     name: Browser tests (iPhone screen, Chrome + Safari engines)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # WebKit from this Playwright needs 24.04 libraries (libicu74); latest is 26.04
     timeout-minutes: 35
     services:
       postgres:

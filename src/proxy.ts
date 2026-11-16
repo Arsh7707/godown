@@ -13,5 +13,6 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api/auth|api/cron|_next/|manifest.webmanifest|sw.js|icons/|favicon.ico|robots.txt).*)"],
+  // b/ is the bill link sent to parties: no login (the token in it is the key).
+  matcher: ["/((?!login|b/|api/auth|api/cron|_next/|manifest.webmanifest|sw.js|icons/|favicon.ico|robots.txt).*)"],
 };

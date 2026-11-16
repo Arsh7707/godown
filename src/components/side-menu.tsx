@@ -12,6 +12,8 @@ import { Icon, type IconName } from "./ui/icons";
 export interface MenuInfo {
   role: "owner" | "staff" | "viewer";
   stockKeeper: boolean;
+  /** Staff who can make bills. */
+  supervisor?: boolean;
   /** Items low or below zero, shown as a badge on Stock. */
   lowCount: number;
   /** Dispatch lines no order covers (not marked OK), shown as a badge. */
@@ -93,6 +95,7 @@ export function SideMenu({
         { href: "/stock", icon: "stock", label: t.s.title, badge: info.lowCount },
         { href: "/history", icon: "history", label: t.h.title },
         { href: "/unmatched", icon: "question", label: t.u.menu, badge: info.unmatchedCount },
+        { href: "/bills", icon: "bill", label: t.b.menu, show: info.role !== "staff" || !!info.supervisor },
         { href: "/reports", icon: "chart", label: t.r.menu, show: info.role !== "staff" },
       ],
     },

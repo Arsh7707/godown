@@ -133,4 +133,37 @@ test.describe("owner checks", () => {
     // The count is logged as the change it made: −14 counted to 20.
     await expect(page.getByText("Rayon Plain 34 pcs").first()).toBeVisible();
   });
+
+  test("a bill from a dispatch: GST worked out, saved, numbered", async ({ page, seed }) => {
+    await page.goto(`/dispatches/${seed.looseDispatchId}`, { waitUntil: "networkidle" });
+    await page.getByRole("link", { name: "Make bill" }).click();
+    await expect(page).toHaveURL(/\/bills\/new/);
+    await expectHealthy(page);
+    // 5 m Cotton Poplin at 5% GST; no earlier rate, so it has to be typed.
+    await expect(page.getByRole("button", { name: "Save bill" })).toBeDisabled();
+    await page.getByLabel("Rate ₹").fill("120");
+    await expect(page.getByText("₹630.00").first()).toBeVisible();
+    await page.getByRole("button", { name: "Save bill" }).click();
+    await expect(page).toHaveURL(/\/bills\/[0-9a-f-]{36}$/);
+    await expect(page.getByText("TAX INVOICE")).toBeVisible();
+    await expect(page.getByText("No. E2E/").first()).toBeVisible();
+    await expect(page.getByText("Rupees Six Hundred Thirty Only")).toBeVisible();
+    await expectHealthy(page);
+    // The dispatch now links to its bill instead of offering a new one.
+    await page.goto(`/dispatches/${seed.looseDispatchId}`, { waitUntil: "networkidle" });
+    await expect(page.getByRole("link", { name: /Bill E2E\// })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Make bill" })).toHaveCount(0);
+  });
+});
+
+test("the party opens the bill link without logging in", async ({ page, seed }) => {
+  await page.goto(`/b/${seed.billToken}`, { waitUntil: "networkidle" });
+  await expect(page.getByText("TAX INVOICE")).toBeVisible();
+  await expect(page.getByText("Sharma Textiles").first()).toBeVisible();
+  await expect(page.getByText("GSTIN 03AAPFU0939F1ZV").first()).toBeVisible();
+  await expectHealthy(page);
+  // A made-up link shows nothing.
+  const res = await page.goto(`/b/${"x".repeat(24)}`, { waitUntil: "networkidle" });
+  expect(res?.status()).toBeLessThan(500);
+  await expect(page.getByText("TAX INVOICE")).toHaveCount(0);
 });

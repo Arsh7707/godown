@@ -94,7 +94,7 @@ function LineCard({ t, line, owner, run, busy }: { t: Messages; line: UnmatchedL
                   aria-label={`${t.u.amount} ${fmtDate(o.orderDate)}`}
                   value={amounts[o.orderLineId] ?? ""}
                   onChange={(e) => setAmounts((a) => ({ ...a, [o.orderLineId]: e.target.value }))}
-                  className="w-20 rounded-lg border border-line-strong bg-surface px-2 py-2 text-right text-lg"
+                  className="min-h-12 w-20 rounded-lg border border-line-strong bg-surface px-2 py-2 text-right text-lg"
                   placeholder="0"
                 />
               )}
@@ -108,7 +108,7 @@ function LineCard({ t, line, owner, run, busy }: { t: Messages; line: UnmatchedL
                 onClick={() =>
                   run({ action: "link", links: chosen.map((x) => ({ dispatchLineId: line.dispatchLineId, orderLineId: x.o.orderLineId, quantity: asText(x.c) })) }, t.u.linked)
                 }
-                className="w-full rounded-control bg-go py-2.5 font-semibold text-ink-inverse disabled:opacity-40"
+                className="min-h-12 w-full rounded-control bg-go py-2.5 font-semibold text-ink-inverse disabled:opacity-40"
               >
                 {t.u.link} {total > 0 ? `${formatQty(total)} ${line.unit}` : ""}
               </button>

@@ -39,6 +39,7 @@ const PATHS = {
   phone: "M7 3h10v18H7zM11 18h2",
   calendar: "M4 6h16v15H4zM4 10h16M8 3v4M16 3v4",
   note: "M6 3h9l4 4v14H6V3Zm9 0v4h4M9 12h7M9 16h5",
+  bill: "M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21V3Zm3 5h6M9 12h6M9 16h4",
   undo: "M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3",
   arrowRight: "M5 12h14M13 6l6 6-6 6",
   box: "M3 8l9-5 9 5v8l-9 5-9-5V8Zm0 0 9 5 9-5M12 13v8",

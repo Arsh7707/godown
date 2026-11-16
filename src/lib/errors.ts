@@ -45,7 +45,12 @@ export type LedgerErrorCode =
   | "IMPORT_TOO_BIG"
   | "IMPORT_EMPTY"
   | "IMPORT_STALE"
-  | "RANGE_TOO_LONG";
+  | "RANGE_TOO_LONG"
+  | "INVALID_INPUT"
+  | "BILL_EXISTS"
+  | "DISPATCH_CANCELLED"
+  | "INVALID_RATE"
+  | "INVALID_DISCOUNT";
 
 /** Expected, user-facing rule violations. `details` carries numbers for the UI to localise. */
 export class LedgerError extends Error {

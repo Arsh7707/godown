@@ -18,6 +18,10 @@ export type Seed = {
   orderId: string;
   dispatchId: string;
   looseDispatchId: string;
+  billId: string;
+  billToken: string;
+  /** Never billed by any test: for the new-bill screen check. */
+  unbilledDispatchId: string;
 };
 
 export const stateFile = (role: RoleName) => `e2e/.state/${role}.json`;

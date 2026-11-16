@@ -38,7 +38,7 @@ export default async function Home() {
         companyName={user.companyName}
         userName={user.name}
         lang={user.language}
-        menu={{ role: user.role, stockKeeper: user.stockKeeper, lowCount: lowItems.length, unmatchedCount: unmatched.lines, firms: firms.map((f) => ({ companyId: f.companyId, name: f.name, current: f.current })) }}
+        menu={{ role: user.role, stockKeeper: user.stockKeeper, supervisor: user.supervisor, lowCount: lowItems.length, unmatchedCount: unmatched.lines, firms: firms.map((f) => ({ companyId: f.companyId, name: f.name, current: f.current })) }}
       />
       <Page>
         <OutboxStatus t={t} />

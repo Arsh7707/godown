@@ -9,6 +9,9 @@ import { formatQty } from "@/lib/qty";
 import { messages } from "@/i18n/messages";
 import { AppHeader } from "@/components/app-header";
 import { CancelButton } from "@/components/order-actions";
+import { ButtonLink } from "@/components/ui/button";
+import { billForDispatch, canMakeBills } from "@/billing/service";
+import { formatRupees } from "@/billing/compute";
 
 const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const fmtTime = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
@@ -18,10 +21,12 @@ export default async function DispatchPage({ params }: PageProps<"/dispatches/[i
   if (!isUuid(id)) notFound();
   const user = await requireUser();
   const t = messages(user.language);
-  const d = await dispatchDetail(db, ctxFor(user), id).catch((e) => {
+  const ctx = ctxFor(user);
+  const d = await dispatchDetail(db, ctx, id).catch((e) => {
     if (e instanceof LedgerError && e.code === "NOT_FOUND") notFound();
     throw e;
   });
+  const bill = await billForDispatch(db, ctx, id);
   const lineOf = (itemId: string, unitCode: string | null) => d.lines.find((l) => l.itemId === itemId && (l.unitCode ?? null) === (unitCode ?? null)) ?? d.lines.find((l) => l.itemId === itemId);
   return (
     <>
@@ -43,6 +48,23 @@ export default async function DispatchPage({ params }: PageProps<"/dispatches/[i
           <p className="text-sm text-ink-muted">{[d.takenBy && `${t.e.takenBy}: ${d.takenBy}`, d.transport && `${t.e.transport}: ${d.transport}`, d.lrNumber && `LR ${d.lrNumber}`].filter(Boolean).join(" · ")}</p>
           {d.notes && <p className="rounded-lg bg-sunken p-2 text-sm">📝 {d.notes}</p>}
         </div>
+
+        {bill ? (
+          <Link href={`/bills/${bill.id}`} className="flex items-center justify-between rounded-card bg-surface p-4 shadow-card">
+            <span className="font-semibold">
+              🧾 {t.b.bill} {bill.number}
+              {bill.status === "cancelled" && <span className="text-danger"> · {t.b.cancelled}</span>}
+            </span>
+            <span className="num font-bold">{formatRupees(bill.total)}</span>
+          </Link>
+        ) : (
+          canMakeBills(ctx) &&
+          d.status === "active" && (
+            <ButtonLink variant="primary" size="lg" block icon="bill" href={`/bills/new?dispatch=${id}`}>
+              {t.b.makeBill}
+            </ButtonLink>
+          )
+        )}
 
         {d.status === "active" && (
           <div className="space-y-2">
