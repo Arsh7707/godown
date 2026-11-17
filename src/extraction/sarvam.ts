@@ -11,6 +11,18 @@ const ENDPOINT = "https://api.sarvam.ai/speech-to-text";
 /** Sarvam refuses over 30 seconds per request; the phone sends long notes as WAV so they can be cut. */
 const MAX_PIECE_SECONDS = 28;
 const PARALLEL = 3;
+/** Worth one more try: too many requests, or a fault on Sarvam's side. */
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const RETRY_MS = 800;
+
+/** Waits, but gives up at once when the overall time limit is reached. */
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new ExtractionError("timeout", "Transcription timed out"));
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(t), reject(new ExtractionError("timeout", "Transcription timed out"))), { once: true });
+  });
+}
 const MAX_KEYTERMS = 50;
 const MAX_KEYTERM_LENGTH = 64;
 
@@ -41,7 +53,7 @@ export class SarvamTranscriber implements Transcriber {
     };
   }
 
-  private async once(key: string, data: Uint8Array, mimeType: string, terms: string[], signal: AbortSignal): Promise<TranscriptResult> {
+  private async once(key: string, data: Uint8Array, mimeType: string, terms: string[], signal: AbortSignal, retried = false): Promise<TranscriptResult> {
     const form = new FormData();
     form.append("file", new Blob([new Uint8Array(data)], { type: mimeType }), `voice.${extFor(mimeType)}`);
     form.append("model", this.model);
@@ -57,19 +69,34 @@ export class SarvamTranscriber implements Transcriber {
       res = await fetch(ENDPOINT, { method: "POST", headers: { "api-subscription-key": key }, body: form, signal });
     } catch (e) {
       if (signal.aborted) throw new ExtractionError("timeout", "Transcription timed out");
+      // The connection dropped: one more try.
+      if (!retried) return this.again(key, data, mimeType, terms, signal);
       throw new ExtractionError("transcription_failed", e instanceof Error ? e.message : String(e));
+    }
+    // Busy, or a fault on Sarvam's side: one more try after a short pause usually works.
+    if (RETRY_STATUS.has(res.status) && !retried) {
+      await res.body?.cancel().catch(() => {});
+      return this.again(key, data, mimeType, terms, signal);
     }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       // Sarvam has its own idea of a "duplicate" name. Rather than lose the note, read it without the names.
       if (res.status === 400 && terms.length && /keyterm/i.test(body)) {
         console.warn(`[voice] Sarvam refused the name list, reading without it: ${body.slice(0, 200)}`);
-        return this.once(key, data, mimeType, [], signal);
+        return this.once(key, data, mimeType, [], signal, retried);
       }
-      throw new ExtractionError(res.status === 401 || res.status === 403 ? "not_configured" : "transcription_failed", `Sarvam ${res.status}: ${body.slice(0, 200)}`);
+      // Wrong key, or no credit left: the owner has to fix the account.
+      const account = res.status === 401 || res.status === 402 || res.status === 403;
+      throw new ExtractionError(account ? "not_configured" : "transcription_failed", `Sarvam ${res.status}: ${body.slice(0, 200)}`);
     }
-    const json = (await res.json()) as { transcript?: string; language_code?: string | null };
+    const json = (await res.json().catch(() => null)) as { transcript?: string; language_code?: string | null } | null;
+    if (!json) throw new ExtractionError("transcription_failed", "Sarvam sent back something that isn't JSON");
     return { text: (json.transcript ?? "").trim(), languageCode: json.language_code ?? null };
+  }
+
+  private async again(key: string, data: Uint8Array, mimeType: string, terms: string[], signal: AbortSignal) {
+    await pause(RETRY_MS, signal);
+    return this.once(key, data, mimeType, terms, signal, true);
   }
 }
 

@@ -333,6 +333,8 @@ export async function correctOrder(db: Db, ctx: Ctx, orderId: string, input: Cor
   if (input.promisedDate) assertPromisedDate(input.promisedDate);
   const parsed = input.lines.map((l) => ({ ...parseLines([l])[0], orderLineId: l.orderLineId }));
   if (!parsed.length) throw new LedgerError("NO_LINES", "At least one line is required");
+  const lineIds = parsed.map((l) => l.orderLineId).filter(Boolean);
+  if (new Set(lineIds).size !== lineIds.length) throw new LedgerError("INVALID_INPUT", "The same order line appears twice");
 
   return db.transaction(async (tx) => {
     await lockFirm(tx, ctx);

@@ -37,7 +37,8 @@ export async function POST(req: Request) {
     if (user.role === "viewer") return fail("FORBIDDEN", 403);
 
     const [prior] = await db.select().from(captures).where(and(eq(captures.companyId, user.companyId), eq(captures.captureId, b.captureId)));
-    if (prior?.result) return json({ ok: true, result: prior.result, duplicate: true });
+    // A reading that worked is kept; one that failed is tried again (the "Try again" button, or the outbox resending).
+    if (prior?.result && prior.status === "extracted") return json({ ok: true, result: prior.result, duplicate: true });
 
     const att = async (id?: string) => {
       if (!id) return undefined;

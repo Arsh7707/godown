@@ -4,7 +4,7 @@
 import { displayTaxId } from "@/lib/india";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db/types";
-import { allocations, dispatchLines, dispatchRevisions, dispatches, items, orderLines, orderRevisions, orders, parties, users } from "@/db/schema";
+import { allocations, dispatchLines, dispatchRevisions, dispatches, items, orderLines, orderLineVersions, orderRevisions, orders, parties, users } from "@/db/schema";
 import { todayIST } from "@/lib/dates";
 import { toCenti } from "@/lib/qty";
 import { LedgerError } from "@/lib/errors";
@@ -197,7 +197,19 @@ export interface TimelineEvent {
   dispatchRev?: number;
   /** This user may edit/cancel this dispatch. */
   canChange?: boolean;
+  /** A correction: what it changed compared with the version before. */
+  changes?: OrderChange[];
 }
+
+export type OrderChange =
+  | { kind: "qty"; itemName: string; unit: string; before: number; after: number }
+  | { kind: "added"; itemName: string; unit: string; after: number }
+  | { kind: "removed"; itemName: string }
+  | { kind: "item"; before: string; after: string }
+  | { kind: "promised"; before: string | null; after: string | null }
+  | { kind: "date"; before: string; after: string }
+  | { kind: "party"; before: string; after: string }
+  | { kind: "notes" };
 
 /** An order with its lines and a timeline of what happened to it, and who did it. */
 export async function orderDetail(db: Db, ctx: Ctx, orderId: string) {
@@ -236,12 +248,41 @@ export async function orderDetail(db: Db, ctx: Ctx, orderId: string) {
         .where(inArray(allocations.orderLineId, lineIds))
     : [];
 
-  const events: TimelineEvent[] = revs.map((r) => ({
-    at: r.createdAt,
-    kind: r.rev === 1 ? "created" : r.status === "cancelled" ? "cancelled" : "corrected",
-    by: userName.get(r.createdBy) ?? "?",
-    text: r.reason ?? undefined,
-  }));
+  // Every version's lines, to say what each correction changed.
+  const versions = await db.select().from(orderLineVersions).where(inArray(orderLineVersions.orderRevisionId, revs.map((r) => r.id)));
+  const partyIds = [...new Set(revs.map((r) => r.partyId))];
+  const partyName = new Map((partyIds.length > 1 ? await db.select({ id: parties.id, name: parties.name }).from(parties).where(inArray(parties.id, partyIds)) : []).map((p) => [p.id, p.name]));
+  const linesOf = (revId: string) => new Map(versions.filter((v) => v.orderRevisionId === revId).map((v) => [v.orderLineId, v]));
+  const nameOf = (itemId: string) => item.get(itemId)?.name ?? "?";
+  const unitOf = (itemId: string, u: string | null) => unitLabel(u, item.get(itemId)?.unit ?? "");
+  const changesBetween = (a: (typeof revs)[number], b: (typeof revs)[number]): OrderChange[] => {
+    const out: OrderChange[] = [];
+    if (a.partyId !== b.partyId) out.push({ kind: "party", before: partyName.get(a.partyId) ?? "?", after: partyName.get(b.partyId) ?? "?" });
+    if (a.orderDate !== b.orderDate) out.push({ kind: "date", before: a.orderDate, after: b.orderDate });
+    const before = linesOf(a.id);
+    const after = linesOf(b.id);
+    for (const [id, v] of after) {
+      const p = before.get(id);
+      if (!p) out.push({ kind: "added", itemName: nameOf(v.itemId), unit: unitOf(v.itemId, v.unit), after: toCenti(v.quantity) });
+      else if (p.itemId !== v.itemId || (p.unit ?? null) !== (v.unit ?? null)) out.push({ kind: "item", before: `${nameOf(p.itemId)} (${unitOf(p.itemId, p.unit)})`, after: `${nameOf(v.itemId)} (${unitOf(v.itemId, v.unit)})` });
+      if (p && toCenti(p.quantity) !== toCenti(v.quantity)) out.push({ kind: "qty", itemName: nameOf(v.itemId), unit: unitOf(v.itemId, v.unit), before: toCenti(p.quantity), after: toCenti(v.quantity) });
+    }
+    for (const [id, p] of before) if (!after.has(id)) out.push({ kind: "removed", itemName: nameOf(p.itemId) });
+    if ((a.promisedDate ?? null) !== (b.promisedDate ?? null)) out.push({ kind: "promised", before: a.promisedDate ?? null, after: b.promisedDate ?? null });
+    if ((a.notes ?? "") !== (b.notes ?? "")) out.push({ kind: "notes" });
+    return out;
+  };
+
+  const events: TimelineEvent[] = revs.map((r, i) => {
+    const kind = r.rev === 1 ? "created" : r.status === "cancelled" ? "cancelled" : "corrected";
+    return {
+      at: r.createdAt,
+      kind,
+      by: userName.get(r.createdBy) ?? "?",
+      text: r.reason ?? undefined,
+      ...(kind === "corrected" && i > 0 ? { changes: changesBetween(revs[i - 1], r) } : {}),
+    };
+  });
   for (const a of allocs) {
     const r = activeRevs.get(a.revisionId);
     if (!r) continue; // superseded or cancelled dispatch

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/db/types";
-import { cancelDispatch, cancelOrder, createDispatch, createOrder } from "@/ledger/service";
+import { cancelDispatch, cancelOrder, correctOrder, createDispatch, createOrder } from "@/ledger/service";
 import { dispatchDetail, dispatchForEdit, dispatchList, orderDetail, partyOrders, pendingOverview } from "@/ledger/queries";
 import { previewDispatch } from "@/ledger/service";
 import { cid, freshDb, makeCompany, TODAY } from "./helpers";
@@ -119,5 +119,52 @@ describe("party orders and order detail", () => {
     const other = await makeCompany(db, "Other");
     await expect(orderDetail(db, other.viewer, o.orderId)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(partyOrders(db, other.viewer, co.sharma.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("order history says what each correction changed", () => {
+  it("quantities, added and removed lines, promised date, party and note", async () => {
+    const o = await order([{ itemId: co.d4012.id, quantity: 60 }, { itemId: co.cotton.id, quantity: 20 }], "2026-10-05");
+    const line = async () => (await orderDetail(db, co.owner, o.orderId)).lines;
+    const [d, c] = await line();
+    await correctOrder(db, co.owner, o.orderId, {
+      baseRev: 1,
+      partyId: co.gupta.id,
+      orderDate: "2026-10-06",
+      promisedDate: "2026-10-20",
+      notes: "urgent",
+      lines: [{ orderLineId: d.orderLineId, itemId: co.d4012.id, quantity: "70" }, { itemId: co.cotton.id, quantity: "5", unit: "thaan" }],
+    });
+    const corrected = (await orderDetail(db, co.owner, o.orderId)).events.find((e) => e.kind === "corrected")!;
+    expect(corrected.changes).toEqual(
+      expect.arrayContaining([
+        { kind: "party", before: "Sharma Textiles", after: "Gupta Traders" },
+        { kind: "date", before: "2026-10-05", after: "2026-10-06" },
+        { kind: "qty", itemName: "D-4012", unit: "pcs", before: 6000, after: 7000 },
+        { kind: "added", itemName: "Cotton Poplin", unit: "thaan", after: 500 },
+        { kind: "removed", itemName: "Cotton Poplin" },
+        { kind: "promised", before: null, after: "2026-10-20" },
+        { kind: "notes" },
+      ]),
+    );
+    expect(corrected.changes).toHaveLength(7);
+    void c;
+  });
+
+  it("an edit that changes nothing lists nothing; a cancel isn't a correction", async () => {
+    const o = await order([{ itemId: co.d4012.id, quantity: 10 }]);
+    const [d] = (await orderDetail(db, co.owner, o.orderId)).lines;
+    await correctOrder(db, co.owner, o.orderId, { baseRev: 1, partyId: co.sharma.id, orderDate: TODAY, lines: [{ orderLineId: d.orderLineId, itemId: co.d4012.id, quantity: "10" }], reason: "checked" });
+    await cancelOrder(db, co.owner, o.orderId, { baseRev: 2 });
+    const ev = (await orderDetail(db, co.owner, o.orderId)).events;
+    expect(ev.find((e) => e.kind === "corrected")).toMatchObject({ changes: [], text: "checked" });
+    expect(ev.find((e) => e.kind === "cancelled")?.changes).toBeUndefined();
+  });
+
+  it("the same order line twice in one edit is refused", async () => {
+    const o = await order([{ itemId: co.d4012.id, quantity: 10 }]);
+    const [d] = (await orderDetail(db, co.owner, o.orderId)).lines;
+    const twice = [{ orderLineId: d.orderLineId, itemId: co.d4012.id, quantity: "10" }, { orderLineId: d.orderLineId, itemId: co.d4012.id, quantity: "4" }];
+    await expect(correctOrder(db, co.owner, o.orderId, { baseRev: 1, partyId: co.sharma.id, orderDate: TODAY, lines: twice })).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 });

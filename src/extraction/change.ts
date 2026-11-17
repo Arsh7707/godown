@@ -12,6 +12,7 @@ import { isValidDate } from "@/lib/dates";
 import { storedUnit } from "@/lib/units";
 import { displayScript } from "@/lib/script";
 import { formatQty, toPositiveCenti } from "@/lib/qty";
+import { normalizeName } from "@/lib/normalize";
 import { matchMention, type Candidate } from "./matcher";
 import { NameMention } from "./schema";
 import { ExtractionError, type Catalog } from "./types";
@@ -101,37 +102,62 @@ export interface ChangeProposal {
 
 /** Turns the model's answer into form lines, keeping existing order lines' identity. */
 export function buildProposal(out: ChangeOutput, order: CurrentOrder, catalog: Catalog, sourceText: string): ChangeProposal {
-  const byItem = new Map(order.lines.map((l) => [l.itemId, l]));
-  const used = new Set<string>();
-  const lines: ProposedLine[] = out.lines.map((l) => {
-    // Existing lines are named exactly as in the order, so an exact name match finds them.
-    const m = matchMention({ asWritten: l.item.as_written, latin: l.item.latin, catalogGuess: l.item.catalog_guess }, catalog.items);
-    const itemId = m.status === "matched" ? m.id : null;
-    const existing = itemId && !used.has(itemId) ? byItem.get(itemId) : undefined;
-    if (existing) used.add(existing.itemId);
+  const norm = (x: string | null | undefined) => (x ? normalizeName(x) : "");
+  const free = [...order.lines];
+  /** An order line not yet used; with the same item twice (two units), the one in the unit said. */
+  const take = (match: (l: CurrentOrder["lines"][number]) => boolean, unitSaid: string | null) => {
+    const hits = free.filter(match);
+    const baseUnit = (itemId: string) => catalog.items.find((i) => i.id === itemId)?.unit ?? "";
+    const pick = hits.find((l) => (l.unitCode ?? null) === (unitSaid ? (storedUnit(unitSaid, baseUnit(l.itemId)) ?? null) : null)) ?? hits[0];
+    if (pick) free.splice(free.indexOf(pick), 1);
+    return pick;
+  };
+  const proposed: (ProposedLine | null)[] = out.lines.map((l) => {
+    const said = l.unit ?? null;
+    // Lines of the current order come back under their exact name: match those first, so a
+    // fuzzy match can never mistake one for a new item (which would drop the original line).
+    const names = [l.item.as_written, l.item.latin, l.item.catalog_guess].map(norm).filter(Boolean);
+    let existing = take((x) => names.includes(norm(x.itemName)), said);
+    let itemId: string | null;
+    let mention: string | null = null;
+    let candidates: Candidate[] = [];
+    if (existing) itemId = existing.itemId;
+    else {
+      const m = matchMention({ asWritten: l.item.as_written, latin: l.item.latin, catalogGuess: l.item.catalog_guess }, catalog.items);
+      itemId = m.status === "matched" ? m.id : null;
+      mention = m.mention;
+      candidates = m.candidates;
+      if (itemId) existing = take((x) => x.itemId === itemId, said);
+    }
     let quantity = "";
     if (l.quantity !== null) {
-      try {
-        quantity = formatQty(toPositiveCenti(String(l.quantity)));
-      } catch {
-        quantity = "";
+      if (l.quantity <= 0) {
+        // "0" / "nahi chahiye" for one item: nothing sent yet → the line goes; some sent → close it at what was sent.
+        if (!existing || existing.sent <= 0) return null;
+        quantity = formatQty(existing.sent);
+      } else {
+        try {
+          quantity = formatQty(toPositiveCenti(String(l.quantity)));
+        } catch {
+          quantity = "";
+        }
       }
     }
-    const said = l.unit ?? null;
     const itemUnit = itemId ? catalog.items.find((i) => i.id === itemId)?.unit : undefined;
     // Saved as said (no conversion); an existing line keeps its unit unless another is said.
-    const unit = itemUnit ? (storedUnit(said, itemUnit) ?? null) : null;
+    const unit = said ? (itemUnit ? (storedUnit(said, itemUnit) ?? null) : null) : (existing?.unitCode ?? null);
     return {
       orderLineId: existing?.orderLineId,
       itemId,
-      mention: m.mention,
-      candidates: m.candidates,
+      mention,
+      candidates,
       quantity,
       unitSaid: said,
       saidQty: quantity || null,
-      unit: said ? unit : (existing ? (order.lines.find((x) => x.orderLineId === existing.orderLineId)?.unitCode ?? null) : null),
+      unit,
     };
   });
+  const lines = proposed.filter((l): l is ProposedLine => l !== null);
 
   const promisedDate =
     out.promised_date.action === "set" && out.promised_date.iso && isValidDate(out.promised_date.iso)

@@ -16,6 +16,8 @@ import { ActionBar, Page, Qty } from "@/components/ui/screen";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { orderStatus, StatusBadge } from "@/components/ui/status";
+import type { OrderChange } from "@/ledger/queries";
+import type { Messages } from "@/i18n/messages";
 
 export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
   const { id } = await params;
@@ -123,6 +125,15 @@ export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
                       {[formatDay(e.date!, { year: true }), e.takenBy, e.transport, e.lrNumber && `LR ${e.lrNumber}`].filter(Boolean).join(" · ")}
                     </p>
                   )}
+                  {e.changes && e.changes.length > 0 && (
+                    <ul className="space-y-0.5 text-sm text-ink-muted">
+                      {e.changes.map((c, k) => (
+                        <li key={k} className="break-words">
+                          {changeText(t, c)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   {e.text && <p className="text-sm text-ink-muted">“{e.text}”</p>}
                   <p className="text-xs text-ink-subtle">
                     {t.p.by} {e.by} · {formatDateTimeIST(e.at)}
@@ -156,4 +167,27 @@ export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
       </Page>
     </>
   );
+}
+
+/** One line of what a correction changed: "D-4012: 60 → 70 pcs". */
+function changeText(t: Messages, c: OrderChange): string {
+  const day = (d: string | null) => (d ? formatDay(d, { year: true }) : t.p.chNone);
+  switch (c.kind) {
+    case "qty":
+      return `${c.itemName}: ${formatQty(c.before)} → ${formatQty(c.after)} ${c.unit}`;
+    case "added":
+      return `+ ${c.itemName} ${formatQty(c.after)} ${c.unit}`;
+    case "removed":
+      return `− ${c.itemName} (${t.p.chRemoved})`;
+    case "item":
+      return `${c.before} → ${c.after}`;
+    case "promised":
+      return `${t.p.promised}: ${day(c.before)} → ${day(c.after)}`;
+    case "date":
+      return `${t.ui.orders.orderedOn}: ${day(c.before)} → ${day(c.after)}`;
+    case "party":
+      return `${t.p.chParty}: ${c.before} → ${c.after}`;
+    case "notes":
+      return t.p.chNotes;
+  }
 }

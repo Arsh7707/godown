@@ -60,7 +60,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/orders/[
     } catch (e) {
       await Promise.all(usage);
       if (e instanceof ExtractionError) console.warn(`[read] order change not read (${e.reason}): ${e.message.slice(0, 300)}`);
-      if (e instanceof ExtractionError) return fail(e.reason === "empty_input" ? "EMPTY" : "READ_FAILED", 422, { message: e.message });
+      if (e instanceof ExtractionError) return fail(e.reason === "empty_input" ? "EMPTY" : "READ_FAILED", 422, { message: e.message, reason: e.reason });
       throw e;
     }
   });
