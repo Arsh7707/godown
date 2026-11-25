@@ -24,6 +24,7 @@ const en = {
   // home
   newOrder: "New Order",
   dispatch: "Dispatch",
+  newDispatch: "New dispatch",
   pending: "Pending",
   newOrderHint: "Photo, voice or type",
   dispatchHint: "Goods sent",
@@ -162,7 +163,7 @@ const en = {
   // redesign: shared screen words
   ui: {
     nav: "Main",
-    tabs: { home: "Home", orders: "Orders", pending: "Pending", stock: "Stock" },
+    tabs: { home: "Home", orders: "Orders", pending: "Pending", dispatched: "Dispatched", stock: "Stock" },
     status: { pending: "Not sent", partial: "Part sent", fulfilled: "Fulfilled", overdue: "Overdue", cancelled: "Cancelled" },
     left: "left to send",
     leftShort: "left",
@@ -932,6 +933,7 @@ const hi: Messages = {
   chooseCompany: "कौन सा बिज़नेस?",
   newOrder: "नया ऑर्डर",
   dispatch: "माल भेजा",
+  newDispatch: "माल भेजें",
   pending: "बाकी माल",
   newOrderHint: "फ़ोटो, आवाज़ या टाइप",
   dispatchHint: "डिस्पैच दर्ज करें",
@@ -1067,7 +1069,7 @@ const hi: Messages = {
   },
   ui: {
     nav: "मुख्य",
-    tabs: { home: "होम", orders: "ऑर्डर", pending: "बाकी माल", stock: "स्टॉक" },
+    tabs: { home: "होम", orders: "ऑर्डर", pending: "बाकी माल", dispatched: "भेजा गया", stock: "स्टॉक" },
     status: { pending: "नहीं भेजा", partial: "कुछ भेजा", fulfilled: "पूरा भेजा", overdue: "देर हो गई", cancelled: "रद्द" },
     left: "भेजना बाकी",
     leftShort: "बाकी",

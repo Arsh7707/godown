@@ -124,7 +124,7 @@ export default async function Home() {
         {canEnter && (
           <ActionBar>
             <ButtonLink href="/dispatch/new" variant="secondary" size="lg" icon="truck" className="flex-1 whitespace-nowrap">
-              {t.dispatch}
+              {t.newDispatch}
             </ButtonLink>
             <ButtonLink href="/order/new" variant="primary" size="lg" icon="plus" className="flex-1 whitespace-nowrap">
               {t.newOrder}

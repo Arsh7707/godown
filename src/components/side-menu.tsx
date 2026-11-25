@@ -80,7 +80,7 @@ export function SideMenu({
         {
           href: "/dispatch/new",
           icon: "truck",
-          label: t.dispatch,
+          label: t.newDispatch,
           show: canEnter,
         },
         { href: "/pending", icon: "pending", label: t.pending },

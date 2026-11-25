@@ -12,7 +12,7 @@ export default async function DispatchedPage({ searchParams }: PageProps<"/dispa
   const list = await dispatchList(db, ctxFor(user), { includeCancelled: all === "1", limit: 300 });
   return (
     <>
-      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/" title={t.d.title} />
+      <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} title={t.d.title} />
       <DispatchedView lang={user.language} list={list} showingCancelled={all === "1"} />
     </>
   );
