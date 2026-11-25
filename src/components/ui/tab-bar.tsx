@@ -5,12 +5,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "./icons";
 
-export type TabLabels = { home: string; orders: string; pending: string; stock: string; nav: string };
+export type TabLabels = { home: string; orders: string; pending: string; dispatched: string; stock: string; nav: string };
 
 const TABS: { key: keyof Omit<TabLabels, "nav">; href: string; icon: IconName; match: (p: string) => boolean }[] = [
   { key: "home", href: "/", icon: "home", match: (p) => p === "/" },
   { key: "orders", href: "/orders", icon: "orders", match: (p) => p.startsWith("/orders") },
   { key: "pending", href: "/pending", icon: "pending", match: (p) => p.startsWith("/pending") },
+  // Where an order ends up once it's sent: Orders → Pending → Dispatched.
+  { key: "dispatched", href: "/dispatches", icon: "truck", match: (p) => p.startsWith("/dispatches") },
   { key: "stock", href: "/stock", icon: "stock", match: (p) => p === "/stock" || p.startsWith("/stock/item") },
 ];
 

@@ -81,7 +81,22 @@ test.describe("staff at work", () => {
     await fillEntry(page, "/dispatch/new", "Gupta Traders", [["Rayon Plain", "4"]]);
     await page.getByRole("button", { name: "Save" }).click();
     await saved(page);
+    // Straight from the saved screen to the list of what was sent: it's there.
+    await page.getByRole("link", { name: "Dispatched" }).first().click();
+    await expect(page).toHaveURL(/\/dispatches$/);
+    await expect(page.getByText("Gupta Traders").first()).toBeVisible();
+    await expectHealthy(page);
     await expect.poll(() => stockRow(page, "Rayon Plain"), POLL).toMatchObject({ inStock: 36, owed: 3, free: 33 });
+  });
+
+  test("the Dispatched tab lists what was sent; the menu's button is for a new dispatch", async ({ page }) => {
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.getByRole("navigation").getByRole("link", { name: "Dispatched" }).click();
+    await expect(page).toHaveURL(/\/dispatches$/);
+    await expect(page.getByText("Sharma Textiles").first()).toBeVisible();
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.getByRole("link", { name: "New dispatch" }).click();
+    await expect(page).toHaveURL(/\/dispatch\/new$/);
   });
 
   test("sending more than is in stock asks first, then goes negative", async ({ page }) => {

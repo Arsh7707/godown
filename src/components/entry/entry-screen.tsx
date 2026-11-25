@@ -573,8 +573,9 @@ export function EntryScreen({
             >
               {t.e.another}
             </Button>
-            <ButtonLink href={isStock(kind) ? "/stock" : "/"} variant="secondary" size="lg" icon={isStock(kind) ? "stock" : "home"}>
-              {isStock(kind) ? t.s.title : t.e.home}
+            {/* After a dispatch: straight to the list of what was sent. */}
+            <ButtonLink href={isStock(kind) ? "/stock" : kind === "dispatch" ? "/dispatches" : "/"} variant="secondary" size="lg" icon={isStock(kind) ? "stock" : kind === "dispatch" ? "truck" : "home"}>
+              {isStock(kind) ? t.s.title : kind === "dispatch" ? t.d.title : t.e.home}
             </ButtonLink>
           </div>
         </div>
