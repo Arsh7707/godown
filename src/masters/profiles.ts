@@ -47,6 +47,7 @@ export async function companyProfile(db: Db, ctx: Ctx) {
     gstin: c.gstin,
     address: c.address,
     phone: c.phone,
+    email: c.email,
     bankName: c.bankName,
     bankAccount: c.bankAccount,
     bankIfsc: c.bankIfsc,
@@ -60,6 +61,7 @@ export type CompanyInput = Partial<Omit<Awaited<ReturnType<typeof companyProfile
 const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const UPI = /^[\w.-]+@[a-z][a-z0-9.]+$/i;
 const PREFIX = /^[A-Z0-9]{1,8}$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Bill details: each is trimmed (empty clears it) and checked; a GSTIN fills in the state when none is set. */
 function billDetails(input: CompanyInput, currentState: string | null) {
@@ -70,6 +72,7 @@ function billDetails(input: CompanyInput, currentState: string | null) {
   };
   text("address");
   text("phone");
+  text("email", (v) => v.trim().toLowerCase());
   text("bankName");
   text("bankAccount", (v) => v.replace(/\s+/g, ""));
   text("bankIfsc", (v) => v.replace(/\s+/g, "").toUpperCase());
@@ -84,6 +87,7 @@ function billDetails(input: CompanyInput, currentState: string | null) {
   }
   if (out.bankIfsc && !IFSC.test(out.bankIfsc)) throw new LedgerError("INVALID_IFSC", "That IFSC code isn't valid");
   if (out.upiId && !UPI.test(out.upiId)) throw new LedgerError("INVALID_UPI", "That UPI ID isn't valid");
+  if (out.email && (out.email.length > 120 || !EMAIL.test(out.email))) throw new LedgerError("INVALID_EMAIL", "That email isn't valid");
   if (out.billPrefix && !PREFIX.test(out.billPrefix)) throw new LedgerError("INVALID_PREFIX", "Use up to 8 letters or numbers");
   return out;
 }

@@ -13,8 +13,8 @@ export default async function SharedBillPage({ params }: PageProps<"/b/[token]">
   const bill = await billByToken(db, token);
   if (!bill) notFound();
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 space-y-4 px-4 py-6 print:p-0">
-      <div className="flex justify-end">
+    <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 px-4 py-6 print:max-w-none print:space-y-0 print:p-0">
+      <div className="flex justify-end print:hidden">
         <PrintButton label="Print or save PDF" />
       </div>
       <BillSheet bill={bill} />

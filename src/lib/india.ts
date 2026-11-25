@@ -49,6 +49,9 @@ export function isState(s: string): boolean {
   return STATE_NAMES.includes(s);
 }
 
+/** "Haryana" → "06" (GST state code). */
+export const stateCode = (name: string | null) => STATES.find((s) => s.name === name)?.code ?? null;
+
 export function stateForGstin(gstin: string): string | null {
   return STATES.find((s) => s.code === gstin.slice(0, 2))?.name ?? null;
 }

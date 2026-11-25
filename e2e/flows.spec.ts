@@ -162,10 +162,21 @@ test.describe("owner checks", () => {
     await expect(page.getByRole("button", { name: "Save bill" })).toBeDisabled();
     await page.getByLabel("Rate ₹").fill("120");
     await expect(page.getByText("₹630.00").first()).toBeVisible();
+    await page.getByLabel("LR / bilty no.").fill("LR 9001");
+    // A different delivery address needs a name.
+    await page.getByLabel("Goods go to a different address").check();
+    await expect(page.getByRole("button", { name: "Save bill" })).toBeDisabled();
+    await page.getByLabel("Ship to: name").fill("Gupta Godown");
+    await page.getByLabel("Ship to: address").fill("Plot 9, Grain Market");
     await page.getByRole("button", { name: "Save bill" }).click();
     await expect(page).toHaveURL(/\/bills\/[0-9a-f-]{36}$/);
-    await expect(page.getByText("TAX INVOICE")).toBeVisible();
-    await expect(page.getByText("No. E2E/").first()).toBeVisible();
+    await expect(page.getByText("Tax Invoice", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^E2E\/\d\d-\d\d\/\d{4}$/).first()).toBeVisible();
+    await expect(page.getByText("LR 9001")).toBeVisible();
+    await expect(page.getByText("Gupta Godown")).toBeVisible();
+    // Same state: CGST + SGST, each 2.5%, in the goods table and the HSN table.
+    await expect(page.getByText("CGST", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("SGST", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Rupees Six Hundred Thirty Only")).toBeVisible();
     await expectHealthy(page);
     // The dispatch now links to its bill instead of offering a new one.
@@ -177,12 +188,20 @@ test.describe("owner checks", () => {
 
 test("the party opens the bill link without logging in", async ({ page, seed }) => {
   await page.goto(`/b/${seed.billToken}`, { waitUntil: "networkidle" });
-  await expect(page.getByText("TAX INVOICE")).toBeVisible();
+  await expect(page.getByText("Tax Invoice", { exact: true })).toBeVisible();
   await expect(page.getByText("Sharma Textiles").first()).toBeVisible();
-  await expect(page.getByText("GSTIN 03AAPFU0939F1ZV").first()).toBeVisible();
+  await expect(page.getByText("GSTIN/UIN : 03AAPFU0939F1ZV").first()).toBeVisible();
+  // Like the Tally bill: transport details, IGST to another state, HSN-wise tax.
+  for (const text of ["Shree Roadways", "LR 5521", "Mainpuri", "30 days", "Place of Supply : Uttar Pradesh", "State Name : Punjab, Code : 03", "6204"]) await expect(page.getByText(text, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("IGST", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("CGST", { exact: true })).toHaveCount(0);
+  // The whole A4 page fits the phone's width.
+  const box = await page.locator("article").boundingBox();
+  expect(box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/bill-phone.png`, fullPage: true });
   await expectHealthy(page);
   // A made-up link shows nothing.
   const res = await page.goto(`/b/${"x".repeat(24)}`, { waitUntil: "networkidle" });
   expect(res?.status()).toBeLessThan(500);
-  await expect(page.getByText("TAX INVOICE")).toHaveCount(0);
+  await expect(page.getByText("Tax Invoice", { exact: true })).toHaveCount(0);
 });

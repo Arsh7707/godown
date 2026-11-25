@@ -56,6 +56,7 @@ export async function POST(req: Request) {
           gstin: opt("gstin"),
           address: opt("address"),
           phone: opt("phone"),
+          email: opt("email"),
           bankName: opt("bankName"),
           bankAccount: opt("bankAccount"),
           bankIfsc: opt("bankIfsc"),

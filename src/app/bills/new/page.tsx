@@ -29,7 +29,7 @@ export default async function NewBillPage({ searchParams }: PageProps<"/bills/ne
         <BillForm
           lang={user.language}
           mode={{ type: "create", dispatchId: dispatch }}
-          initial={{ kind: draft.seller.gstin ? "gst" : "kacha", billDate: draft.billDate, charges: 0, notes: null, lines: draft.lines.map((l) => ({ ...l, discountPct: 0 })) }}
+          initial={{ kind: draft.seller.gstin ? "gst" : "kacha", billDate: draft.billDate, charges: 0, notes: null, shipping: draft.shipping, lines: draft.lines.map((l) => ({ ...l, discountPct: 0 })) }}
           sellerHasGstin={!!draft.seller.gstin}
           partyHasState={!!draft.party.state}
           interstate={draft.interstate}

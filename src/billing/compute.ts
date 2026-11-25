@@ -171,3 +171,52 @@ export function amountInWords(paise: number): string {
   const p = Math.abs(paise) % 100;
   return `Rupees ${rupeesInWords(rupees)}${p ? ` and ${belowHundred(p)} Paise` : ""} Only`;
 }
+
+export interface HsnRow {
+  /** null: lines without an HSN code. */
+  hsn: string | null;
+  /** The freight/packing row (taxed at the highest line rate). */
+  charges?: true;
+  gstRate: number;
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+}
+
+/**
+ * The HSN-wise tax table printed under a GST bill: one row per HSN code and
+ * rate. Each row's tax is worked out on its own, then the biggest row of each
+ * rate takes up any paisa of rounding, so the rows always add up to the bill.
+ */
+export function hsnSummary(lines: { hsn: string | null; gstRate: number }[], totals: BillTotals, interstate: boolean): HsnRow[] {
+  if (!totals.taxes.length) return [];
+  const rows = new Map<string, HsnRow>();
+  const add = (key: string, row: Omit<HsnRow, "taxable" | "cgst" | "sgst" | "igst">, taxable: number) => {
+    const r = rows.get(key) ?? { ...row, taxable: 0, cgst: 0, sgst: 0, igst: 0 };
+    r.taxable += taxable;
+    rows.set(key, r);
+  };
+  lines.forEach((l, i) => add(`${l.hsn ?? ""}|${l.gstRate}`, { hsn: l.hsn, gstRate: l.gstRate }, totals.lines[i]?.taxable ?? 0));
+  if (totals.charges) {
+    const top = Math.max(0, ...lines.map((l) => l.gstRate));
+    add(`charges|${top}`, { hsn: null, charges: true, gstRate: top }, totals.charges);
+  }
+  const out = [...rows.values()];
+  for (const r of out) {
+    if (interstate) r.igst = round((r.taxable * r.gstRate) / 10_000);
+    else r.cgst = r.sgst = round((r.taxable * r.gstRate) / 20_000);
+  }
+  for (const t of totals.taxes) {
+    const group = out.filter((r) => r.gstRate === t.gstRate);
+    if (!group.length) continue;
+    const big = group.reduce((a, b) => (b.taxable > a.taxable ? b : a));
+    big.cgst += t.cgst - group.reduce((s, r) => s + r.cgst, 0);
+    big.sgst += t.sgst - group.reduce((s, r) => s + r.sgst, 0);
+    big.igst += t.igst - group.reduce((s, r) => s + r.igst, 0);
+  }
+  return out;
+}
+
+/** "1,23,456.50": an amount in a bill's columns, without the ₹. */
+export const formatAmount = (paise: number) => formatRupees(paise).replace("₹", "");

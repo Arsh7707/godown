@@ -12,6 +12,7 @@ import { Field, Segmented, TextArea, TextInput } from "@/components/ui/field";
 import { ActionBar } from "@/components/ui/screen";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/feedback";
+import type { BillShipping } from "@/billing/service";
 
 /** GST rates in use since the 2025 changes (masters/manage.ts GST_RATES). */
 const GST_RATES = [0, 3, 5, 18, 40];
@@ -70,7 +71,7 @@ export function BillForm({
 }: {
   lang: Lang;
   mode: { type: "create"; dispatchId: string } | { type: "edit"; billId: string; baseRev: number };
-  initial: { kind: BillKind; billDate: string; lines: BillFormLine[]; charges: number; notes: string | null };
+  initial: { kind: BillKind; billDate: string; lines: BillFormLine[]; charges: number; notes: string | null; shipping: BillShipping };
   sellerHasGstin: boolean;
   partyHasState: boolean;
   interstate: boolean;
@@ -83,6 +84,16 @@ export function BillForm({
   const [rows, setRows] = useState<Row[]>(() => initial.lines.map(toRow));
   const [charges, setCharges] = useState(initial.charges ? paiseToText(initial.charges) : "");
   const [notes, setNotes] = useState(initial.notes ?? "");
+  const [ship, setShip] = useState(() => ({
+    transport: initial.shipping.transport ?? "",
+    docket: initial.shipping.docket ?? "",
+    destination: initial.shipping.destination ?? "",
+    paymentTerms: initial.shipping.paymentTerms ?? "",
+    other: !!initial.shipping.shipTo,
+    shipToName: initial.shipping.shipTo?.name ?? "",
+    shipToAddress: initial.shipping.shipTo?.address ?? "",
+  }));
+  const setS = (k: keyof typeof ship) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setShip((x) => ({ ...x, [k]: e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value }));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +105,7 @@ export function BillForm({
   const chargesPaise = charges ? parseRupees(charges) : 0;
   const totals = computeBill(kind, parsed.map((p) => ({ quantity: p.quantity ?? 0, rate: p.rate ?? 0, discountPct: p.discountPct ?? 0, gstRate: p.gstRate ?? 0 })), { interstate, charges: chargesPaise ?? 0 });
   const missingRate = parsed.some((p) => p.rate === null);
-  const invalid = parsed.some((p) => !p.quantity || p.discountPct === null || p.gstRate === null) || chargesPaise === null || rows.some((r) => !r.name.trim());
+  const invalid = parsed.some((p) => !p.quantity || p.discountPct === null || p.gstRate === null) || chargesPaise === null || rows.some((r) => !r.name.trim()) || (ship.other && !ship.shipToName.trim());
 
   const gstOptions = (current: string) => {
     const c = current ? Number(current) : null;
@@ -109,6 +120,11 @@ export function BillForm({
       billDate,
       charges: charges || "0",
       notes: notes.trim() || null,
+      transport: ship.transport.trim() || null,
+      docket: ship.docket.trim() || null,
+      destination: ship.destination.trim() || null,
+      paymentTerms: ship.paymentTerms.trim() || null,
+      shipTo: ship.other && ship.shipToName.trim() ? { name: ship.shipToName.trim(), address: ship.shipToAddress.trim() || null } : null,
       lines: rows.map((r) => ({ itemId: r.itemId, name: r.name.trim(), hsn: gst ? r.hsn.trim() || null : r.hsn.trim() || null, quantity: r.qty, unit: r.unit.trim(), rate: r.rate, discountPct: r.disc || "0", gstRate: r.gst || "0" })),
     };
     try {
@@ -209,6 +225,38 @@ export function BillForm({
       <Button variant="secondary" block icon="plus" onClick={() => setRows((rs) => [...rs, { itemId: null, name: "", hsn: "", qty: "1", unit: "pcs", rate: "", disc: "", gst: rs[rs.length - 1]?.gst ?? "", rateFrom: null }])}>
         {t.b.addLine}
       </Button>
+
+      <Card className="space-y-3 p-4">
+        <h2 className="text-lg font-bold">{t.b.transportTitle}</h2>
+        <Field label={t.b.transport} htmlFor="bill-transport">
+          <TextInput id="bill-transport" value={ship.transport} maxLength={120} onChange={setS("transport")} />
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label={t.b.docket} htmlFor="bill-docket">
+            <TextInput id="bill-docket" value={ship.docket} maxLength={120} onChange={setS("docket")} />
+          </Field>
+          <Field label={t.b.destination} htmlFor="bill-destination">
+            <TextInput id="bill-destination" value={ship.destination} maxLength={120} onChange={setS("destination")} />
+          </Field>
+        </div>
+        <Field label={t.b.paymentTerms} htmlFor="bill-terms">
+          <TextInput id="bill-terms" value={ship.paymentTerms} maxLength={120} placeholder={t.b.paymentTermsHint} onChange={setS("paymentTerms")} />
+        </Field>
+        <label className="flex min-h-12 items-center gap-3 text-base">
+          <input type="checkbox" checked={ship.other} onChange={setS("other")} className="size-6 accent-brand" />
+          {t.b.shipToOther}
+        </label>
+        {ship.other && (
+          <>
+            <Field label={t.b.shipToName} htmlFor="bill-shipto-name">
+              <TextInput id="bill-shipto-name" value={ship.shipToName} maxLength={120} invalid={!ship.shipToName.trim()} onChange={setS("shipToName")} />
+            </Field>
+            <Field label={t.b.shipToAddress} htmlFor="bill-shipto-address">
+              <TextArea id="bill-shipto-address" value={ship.shipToAddress} maxLength={400} rows={3} onChange={setS("shipToAddress")} />
+            </Field>
+          </>
+        )}
+      </Card>
 
       <Card className="space-y-3 p-4">
         <Field label={t.b.charges} htmlFor="bill-charges">

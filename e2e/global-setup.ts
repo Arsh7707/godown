@@ -20,7 +20,8 @@ import { createDispatch, createOrder } from "../src/ledger/service";
 import { createItem, createParty } from "../src/masters/service";
 import { recordStock } from "../src/stock/service";
 import { createBill } from "../src/billing/service";
-import { setProductTax } from "../src/masters/manage";
+import { setProductTax, updateParty } from "../src/masters/manage";
+import { updateCompany } from "../src/masters/profiles";
 import { todayIST, addDays } from "../src/lib/dates";
 import { assertLocalDb, DB_URL, PHONES, SEED_FILE } from "./env";
 
@@ -67,7 +68,19 @@ export default async function globalSetup() {
     // Bills: one made already (for the bill screens and the party's link); one dispatch left for the screen check of a new bill.
     await setProductTax(db, owner, "D-4012", { hsn: "6204", gstRate: "5" });
     await setProductTax(db, owner, "Cotton Poplin", { hsn: "5208", gstRate: "5" });
-    const bill = await createBill(db, owner, dispatch.dispatchId, { kind: "gst", billDate: addDays(today, -2), lines: [{ itemId: d4012.id, name: "D-4012", hsn: "6204", quantity: 25, unit: "pcs", rate: "450", gstRate: "5" }], charges: "150" });
+    // Made-up details, so the bill looks like a real one: a party in another state gets IGST.
+    await updateCompany(db, owner, { phone: "+911610000000", email: "accounts@e2e.example", bankName: "Example Bank", bankAccount: "000111222333", bankIfsc: "EXMP0001234" });
+    await updateParty(db, owner, sharma.id, { city: "Mainpuri", state: "Uttar Pradesh", address: "Gali 3, Station Road" });
+    const bill = await createBill(db, owner, dispatch.dispatchId, {
+      kind: "gst",
+      billDate: addDays(today, -2),
+      lines: [{ itemId: d4012.id, name: "D-4012", hsn: "6204", quantity: 25, unit: "pcs", rate: "450", gstRate: "5" }],
+      charges: "150",
+      transport: "Shree Roadways",
+      docket: "LR 5521",
+      destination: "Mainpuri",
+      paymentTerms: "30 days",
+    });
     const [{ shareToken }] = await db.select({ shareToken: s.bills.shareToken }).from(s.bills);
     const unbilled = await createDispatch(db, staff, { ...app, captureId: cid(), partyId: gupta.id, dispatchDate: addDays(today, -1), lines: [{ itemId: probe.id, quantity: 1 }] });
 
