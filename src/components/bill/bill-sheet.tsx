@@ -1,129 +1,322 @@
-import { amountInWords, formatRupees } from "@/billing/compute";
-import type { BillView } from "@/billing/service";
+import { amountInWords, formatAmount, formatRupees, hsnSummary } from "@/billing/compute";
+import type { BillView, PartyOnBill } from "@/billing/service";
 import { formatDay } from "@/lib/dates";
+import { stateCode } from "@/lib/india";
 import { formatQty } from "@/lib/qty";
+import { FitWidth } from "./fit-width";
+
+/** A4 less the 12 mm print margins (globals.css), in CSS pixels. */
+const PAGE_WIDTH = 703;
 
 /**
  * The bill as the party sees it: on the phone, on the shared link, and
- * printed or saved as PDF. Always in English, like most bills in India.
+ * printed or saved as PDF. Laid out like the Tally tax invoice traders
+ * already use, always in English. Paper is white in dark mode too.
  */
 export function BillSheet({ bill }: { bill: BillView }) {
   const { seller, party, totals } = bill;
   const gst = bill.kind === "gst";
   const pct = (h: number) => `${formatQty(h)}%`;
-  const place = (x: { city: string | null; state: string | null }) => [x.city, x.state].filter(Boolean).join(", ");
+  const hsn = gst ? hsnSummary(bill.lines, totals, bill.interstate) : [];
+  const tax = totals.cgst + totals.sgst + totals.igst;
+  const units = new Set(bill.lines.map((l) => l.unit.toLowerCase()));
+  const totalQty = units.size === 1 ? `${formatQty(bill.lines.reduce((s, l) => s + l.quantity, 0))} ${bill.lines[0].unit}` : "";
+  const shipTo = bill.shipTo ?? { name: party.name, address: [party.address, place(party)].filter(Boolean).join("\n") || null };
+  const discount = bill.lines.some((l) => l.discountPct > 0);
+  // Columns: Sl, Description, [HSN], Qty, Rate, per, [Disc], Amount
+  const cols = 6 + (gst ? 1 : 0) + (discount ? 1 : 0);
+  const taxRows: [string, number][] = gst
+    ? bill.interstate
+      ? [["IGST", totals.igst]]
+      : [
+          ["CGST", totals.cgst],
+          ["SGST", totals.sgst],
+        ]
+    : [];
+
   return (
-    <article className="relative overflow-hidden rounded-card bg-surface p-5 text-ink shadow-card print:rounded-none print:p-0 print:shadow-none">
-      {bill.status === "cancelled" && (
-        <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="-rotate-12 rounded-lg border-4 border-danger/60 px-6 py-2 text-5xl font-black tracking-widest text-danger/60">CANCELLED</span>
-        </div>
-      )}
-
-      <header className="border-b-2 border-ink pb-3 text-center">
-        <h2 className="text-2xl font-bold">{seller.name}</h2>
-        {seller.address && <p className="text-sm whitespace-pre-line">{seller.address}</p>}
-        {place(seller) && <p className="text-sm">{place(seller)}</p>}
-        <p className="text-sm">{[seller.phone && `Phone ${seller.phone}`, seller.gstin && `GSTIN ${seller.gstin}`].filter(Boolean).join(" · ")}</p>
-      </header>
-
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line py-3">
-        <p className="text-lg font-bold tracking-wide">{gst ? "TAX INVOICE" : "ESTIMATE"}</p>
-        <p className="text-right text-sm">
-          <span className="num block font-semibold">No. {bill.number}</span>
-          <span className="block">Date {formatDay(bill.billDate, { year: true })}</span>
-        </p>
-      </div>
-
-      <section className="border-b border-line py-3 text-sm">
-        <p className="text-xs font-semibold text-ink-subtle uppercase">Bill to</p>
-        <p className="text-base font-bold">{party.name}</p>
-        {party.address && <p className="whitespace-pre-line">{party.address}</p>}
-        {place(party) && <p>{place(party)}</p>}
-        <p>{[party.gstin && `GSTIN ${party.gstin}`, party.phone && `Phone ${party.phone}`].filter(Boolean).join(" · ")}</p>
-        {gst && <p className="text-ink-subtle">{bill.interstate ? "Supply to another state: IGST" : "Supply within the state: CGST + SGST"}</p>}
-      </section>
-
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-ink text-left text-xs text-ink-subtle uppercase">
-            <th className="py-2 pr-2 font-semibold">Item</th>
-            <th className="py-2 pr-2 text-right font-semibold">Qty</th>
-            <th className="py-2 pr-2 text-right font-semibold">Rate</th>
-            <th className="py-2 text-right font-semibold">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bill.lines.map((l, i) => {
-            const t = totals.lines[i];
-            const extra = [gst && l.hsn && `HSN ${l.hsn}`, gst && `GST ${pct(l.gstRate)}`, l.discountPct > 0 && `Disc ${pct(l.discountPct)}`].filter(Boolean).join(" · ");
-            return (
-              <tr key={i} className="border-b border-line align-top">
-                <td className="py-2 pr-2">
-                  <span className="block font-semibold break-words">{l.name}</span>
-                  {extra && <span className="block text-xs text-ink-subtle">{extra}</span>}
-                </td>
-                <td className="num py-2 pr-2 text-right whitespace-nowrap">
-                  {formatQty(l.quantity)} {l.unit}
-                </td>
-                <td className="num py-2 pr-2 text-right whitespace-nowrap">{formatRupees(l.rate)}</td>
-                <td className="num py-2 text-right whitespace-nowrap">{formatRupees(t.taxable)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      <dl className="ml-auto mt-3 w-full max-w-xs space-y-1 text-sm">
-        {totals.discount > 0 && (
-          <>
-            <Row label="Gross" value={formatRupees(totals.gross)} />
-            <Row label="Discount" value={`−${formatRupees(totals.discount)}`} />
-          </>
+    <FitWidth width={PAGE_WIDTH}>
+      <article data-paper className="relative bg-white text-[11px] leading-snug text-black print:text-[10px]">
+        {bill.status === "cancelled" && (
+          <div aria-hidden className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <span className="-rotate-12 rounded-lg border-4 border-red-700/60 px-6 py-2 text-6xl font-black tracking-widest text-red-700/60">CANCELLED</span>
+          </div>
         )}
-        {totals.charges > 0 && <Row label="Freight / packing" value={formatRupees(totals.charges)} />}
-        {gst && <Row label="Taxable value" value={formatRupees(totals.taxable)} />}
-        {totals.taxes
-          .filter((x) => x.gstRate > 0)
-          .flatMap((x) =>
-            bill.interstate
-              ? [<Row key={`i${x.gstRate}`} label={`IGST ${pct(x.gstRate)}`} value={formatRupees(x.igst)} />]
-              : [<Row key={`c${x.gstRate}`} label={`CGST ${pct(x.gstRate / 2)}`} value={formatRupees(x.cgst)} />, <Row key={`s${x.gstRate}`} label={`SGST ${pct(x.gstRate / 2)}`} value={formatRupees(x.sgst)} />],
+        <p className="pb-1 text-center text-sm font-bold">{gst ? "Tax Invoice" : "Estimate"}</p>
+
+        <div className="border border-black">
+          {/* Seller, consignee, buyer | invoice details */}
+          <div className="grid grid-cols-[55%_45%]">
+            <div className="border-r border-black">
+              <div className="border-b border-black p-1.5">
+                <p className="text-sm font-bold uppercase">{seller.name}</p>
+                {seller.address && <p className="whitespace-pre-line">{seller.address}</p>}
+                {place(seller) && <p>{place(seller)}</p>}
+                {seller.phone && <p>Phone : {seller.phone}</p>}
+                {gst && seller.gstin && <p>GSTIN/UIN : {seller.gstin}</p>}
+                {seller.state && <p>{stateLine(seller.state)}</p>}
+                {seller.email && <p>E-Mail : {seller.email}</p>}
+              </div>
+              <div className="border-b border-black p-1.5">
+                <p className="text-[10px]">Consignee (Ship to)</p>
+                <p className="font-bold">{shipTo.name}</p>
+                {shipTo.address && <p className="whitespace-pre-line">{shipTo.address}</p>}
+              </div>
+              <div className="p-1.5">
+                <p className="text-[10px]">Buyer (Bill to)</p>
+                <p className="font-bold">{party.name}</p>
+                {party.address && <p className="whitespace-pre-line">{party.address}</p>}
+                {place(party) && <p>{place(party)}</p>}
+                {party.gstin ? <p>GSTIN/UIN : {party.gstin}</p> : party.aadhaar ? <p>Aadhaar : {party.aadhaar}</p> : null}
+                {party.phone && <p>Phone : {party.phone}</p>}
+                {party.state && <p>{stateLine(party.state)}</p>}
+                {gst && party.state && <p>Place of Supply : {party.state}</p>}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 content-start">
+              <Cell label="Invoice No." value={bill.number} />
+              <Cell label="Dated" value={formatDay(bill.billDate, { year: true })} last />
+              <Cell label="Dispatch Doc No." value={bill.docket} />
+              <Cell label="Mode/Terms of Payment" value={bill.paymentTerms} last />
+              <Cell label="Dispatched through" value={bill.transport} />
+              <Cell label="Destination" value={bill.destination} last />
+              <div className="col-span-2 min-h-12 p-1.5">
+                <p className="text-[10px]">Terms of Delivery</p>
+                {bill.notes && <p className="font-bold whitespace-pre-line">{bill.notes}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Goods */}
+          <table className="w-full border-collapse border-t border-black">
+            <thead>
+              <tr className="border-b border-black text-[10px]">
+                <Th className="w-6">Sl No.</Th>
+                <Th className="text-center">Description of Goods</Th>
+                {gst && <Th className="w-16">HSN/SAC</Th>}
+                <Th className="w-20 text-right">Quantity</Th>
+                <Th className="w-16 text-right">Rate</Th>
+                <Th className="w-9">per</Th>
+                {discount && <Th className="w-10 text-right">Disc. %</Th>}
+                <Th className="w-24 text-right" last>
+                  Amount
+                </Th>
+              </tr>
+            </thead>
+            <tbody>
+              {bill.lines.map((l, i) => (
+                <tr key={i} className="align-top">
+                  <Td>{i + 1}</Td>
+                  <Td className="font-bold break-words">{l.name}</Td>
+                  {gst && <Td>{l.hsn}</Td>}
+                  <Td className="text-right font-bold whitespace-nowrap">
+                    {formatQty(l.quantity)} {l.unit}
+                  </Td>
+                  <Td className="text-right whitespace-nowrap">{formatAmount(l.rate)}</Td>
+                  <Td>{l.unit}</Td>
+                  {discount && <Td className="text-right">{l.discountPct ? pct(l.discountPct) : ""}</Td>}
+                  <Td className="text-right font-bold whitespace-nowrap" last>
+                    {formatAmount(totals.lines[i].taxable)}
+                  </Td>
+                </tr>
+              ))}
+              {totals.charges > 0 && <ChargeRow cols={cols} label="Freight / Packing" amount={formatAmount(totals.charges)} />}
+              {gst && tax > 0 && <ChargeRow cols={cols} label="" amount={formatAmount(totals.taxable)} rule />}
+              {taxRows.map(([label, amount]) => (
+                <ChargeRow key={label} cols={cols} label={label} amount={formatAmount(amount)} bold />
+              ))}
+              {totals.roundOff !== 0 && <ChargeRow cols={cols} label="Round Off" amount={`${totals.roundOff < 0 ? "−" : ""}${formatAmount(Math.abs(totals.roundOff))}`} />}
+              {/* Empty space down to the total, as on a printed bill. */}
+              <tr className="h-40">
+                {Array.from({ length: cols }, (_, i) => (
+                  <Td key={i} last={i === cols - 1} />
+                ))}
+              </tr>
+              <tr className="border-t border-black font-bold">
+                <Td />
+                <Td className="text-right">Total</Td>
+                {gst && <Td />}
+                <Td className="text-right whitespace-nowrap">{totalQty}</Td>
+                <Td />
+                <Td />
+                {discount && <Td />}
+                <Td className="text-right text-xs whitespace-nowrap" last>
+                  {formatRupees(totals.total)}
+                </Td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="border-t border-black p-1.5">
+            <p className="flex justify-between text-[10px]">
+              <span>Amount Chargeable (in words)</span>
+              <span className="italic">E. &amp; O.E</span>
+            </p>
+            <p className="font-bold">{amountInWords(totals.total)}</p>
+          </div>
+
+          {/* HSN-wise tax */}
+          {hsn.length > 0 && (
+            <table className="w-full border-collapse border-t border-black text-right">
+              <thead className="text-[10px]">
+                <tr className="border-b border-black">
+                  <Th className="text-left" rowSpan={2}>
+                    HSN/SAC
+                  </Th>
+                  <Th className="w-20" rowSpan={2}>
+                    Taxable Value
+                  </Th>
+                  {(bill.interstate ? ["IGST"] : ["CGST", "SGST"]).map((h) => (
+                    <Th key={h} className="text-center" colSpan={2}>
+                      {h}
+                    </Th>
+                  ))}
+                  <Th className="w-20" rowSpan={2} last>
+                    Total Tax Amount
+                  </Th>
+                </tr>
+                <tr className="border-b border-black">
+                  {(bill.interstate ? [1] : [1, 2]).flatMap((k) => [
+                    <Th key={`r${k}`} className="w-10">
+                      Rate
+                    </Th>,
+                    <Th key={`a${k}`} className="w-20">
+                      Amount
+                    </Th>,
+                  ])}
+                </tr>
+              </thead>
+              <tbody>
+                {hsn.map((r, i) => (
+                  <tr key={i}>
+                    <Td className="text-left">{r.charges ? "Freight / Packing" : (r.hsn ?? "—")}</Td>
+                    <Td>{formatAmount(r.taxable)}</Td>
+                    {bill.interstate ? (
+                      <>
+                        <Td>{pct(r.gstRate)}</Td>
+                        <Td>{formatAmount(r.igst)}</Td>
+                      </>
+                    ) : (
+                      <>
+                        <Td>{pct(r.gstRate / 2)}</Td>
+                        <Td>{formatAmount(r.cgst)}</Td>
+                        <Td>{pct(r.gstRate / 2)}</Td>
+                        <Td>{formatAmount(r.sgst)}</Td>
+                      </>
+                    )}
+                    <Td last>{formatAmount(r.cgst + r.sgst + r.igst)}</Td>
+                  </tr>
+                ))}
+                <tr className="border-t border-black font-bold">
+                  <Td className="text-right">Total</Td>
+                  <Td>{formatAmount(hsn.reduce((s, r) => s + r.taxable, 0))}</Td>
+                  {bill.interstate ? (
+                    <>
+                      <Td />
+                      <Td>{formatAmount(totals.igst)}</Td>
+                    </>
+                  ) : (
+                    <>
+                      <Td />
+                      <Td>{formatAmount(totals.cgst)}</Td>
+                      <Td />
+                      <Td>{formatAmount(totals.sgst)}</Td>
+                    </>
+                  )}
+                  <Td last>{formatAmount(tax)}</Td>
+                </tr>
+              </tbody>
+            </table>
           )}
-        {totals.roundOff !== 0 && <Row label="Round off" value={`${totals.roundOff > 0 ? "+" : "−"}${formatRupees(Math.abs(totals.roundOff))}`} />}
-        <div className="flex justify-between border-t-2 border-ink pt-2 text-lg font-bold">
-          <dt>Total</dt>
-          <dd className="num">{formatRupees(totals.total)}</dd>
+          {gst && (
+            <p className="border-t border-black p-1.5">
+              <span className="text-[10px]">Tax Amount (in words) : </span>
+              <span className="font-bold">{amountInWords(tax)}</span>
+            </p>
+          )}
+
+          {/* Declaration | bank and signature */}
+          <div className="grid grid-cols-2 border-t border-black">
+            <div className="flex flex-col justify-end p-1.5">
+              <p className="text-[10px] underline">Declaration</p>
+              <p>We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</p>
+            </div>
+            <div className="border-l border-black">
+              {(seller.bankAccount || seller.upiId) && (
+                <div className="p-1.5">
+                  <p className="text-[10px]">Company&apos;s Bank Details</p>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-1">
+                    <BankRow label="A/c Holder's Name" value={seller.name} />
+                    <BankRow label="Bank Name" value={seller.bankName} />
+                    <BankRow label="A/c No." value={seller.bankAccount} />
+                    <BankRow label="IFS Code" value={seller.bankIfsc} />
+                    <BankRow label="UPI" value={seller.upiId} />
+                  </dl>
+                </div>
+              )}
+              <div className="flex min-h-16 flex-col justify-between border-t border-black p-1.5 text-right">
+                <p className="font-bold">for {seller.name}</p>
+                <p className="text-[10px]">Authorised Signatory</p>
+              </div>
+            </div>
+          </div>
         </div>
-      </dl>
-      <p className="mt-2 text-sm font-semibold">{amountInWords(totals.total)}</p>
-
-      {bill.notes && <p className="mt-3 rounded-lg bg-sunken p-2 text-sm whitespace-pre-line print:bg-transparent print:p-0">{bill.notes}</p>}
-
-      {(seller.bankAccount || seller.upiId) && (
-        <section className="mt-4 border-t border-line pt-3 text-sm">
-          <p className="text-xs font-semibold text-ink-subtle uppercase">Pay to</p>
-          {seller.bankAccount && <p>{[seller.bankName, `A/c ${seller.bankAccount}`, seller.bankIfsc && `IFSC ${seller.bankIfsc}`].filter(Boolean).join(" · ")}</p>}
-          {seller.upiId && <p>UPI {seller.upiId}</p>}
-        </section>
-      )}
-
-      <footer className="mt-6 flex items-end justify-between gap-4 text-sm">
-        <p className="text-xs text-ink-subtle">Computer-generated bill.</p>
-        <p className="text-right">
-          <span className="block h-10" />
-          For {seller.name}
-        </p>
-      </footer>
-    </article>
+        <p className="pt-1 text-center text-[10px]">This is a Computer Generated {gst ? "Invoice" : "Estimate"}</p>
+      </article>
+    </FitWidth>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+const place = (x: Pick<PartyOnBill, "city" | "state">) => [x.city, x.state].filter(Boolean).join(", ");
+
+function stateLine(state: string) {
+  const code = stateCode(state);
+  return `State Name : ${state}${code ? `, Code : ${code}` : ""}`;
+}
+
+function Cell({ label, value, last }: { label: string; value: string | null; last?: boolean }) {
   return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-ink-muted">{label}</dt>
-      <dd className="num">{value}</dd>
+    <div className={`min-h-10 border-b border-black p-1.5 ${last ? "" : "border-r"}`}>
+      <p className="text-[10px]">{label}</p>
+      <p className="font-bold break-words">{value}</p>
     </div>
+  );
+}
+
+function Th({ children, className = "", last, ...rest }: React.ThHTMLAttributes<HTMLTableCellElement> & { last?: boolean }) {
+  return (
+    <th className={`px-1 py-1 font-normal ${last ? "" : "border-r border-black"} ${className}`} {...rest}>
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, className = "", last }: { children?: React.ReactNode; className?: string; last?: boolean }) {
+  return <td className={`px-1 py-0.5 ${last ? "" : "border-r border-black"} ${className}`}>{children}</td>;
+}
+
+/** Freight, tax and round-off: right-aligned in the description column, amount in the last. */
+function ChargeRow({ cols, label, amount, bold, rule }: { cols: number; label: string; amount: string; bold?: boolean; rule?: boolean }) {
+  return (
+    <tr>
+      <Td />
+      <Td className={`text-right italic ${bold ? "font-bold" : ""}`}>{label}</Td>
+      {Array.from({ length: cols - 3 }, (_, i) => (
+        <Td key={i} />
+      ))}
+      <Td className={`text-right whitespace-nowrap ${bold ? "font-bold" : ""} ${rule ? "border-t border-black" : ""}`} last>
+        {amount}
+      </Td>
+    </tr>
+  );
+}
+
+function BankRow({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd className="font-bold break-words">: {value}</dd>
+    </>
   );
 }

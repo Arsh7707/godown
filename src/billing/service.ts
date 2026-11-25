@@ -15,6 +15,7 @@ import type { Db } from "@/db/types";
 import { billCounters, billLines, billRevisions, bills, companies, dispatchRevisions, dispatches, items, parties, users } from "@/db/schema";
 import { LedgerError } from "@/lib/errors";
 import { assertEntryDate, todayIST } from "@/lib/dates";
+import { maskAadhaar } from "@/lib/india";
 import { centiToDecimal, toCenti, toPositiveCenti } from "@/lib/qty";
 import { audit, lockCompany, stockOf, type Ctx } from "@/ledger/service";
 import { dispatchDetail } from "@/ledger/queries";
@@ -37,8 +38,11 @@ export interface PartyOnBill {
   state: string | null;
   gstin: string | null;
   phone: string | null;
+  /** Masked (XXXX XXXX 1234), for parties without a GSTIN. Older bills don't have it. */
+  aadhaar?: string | null;
 }
 export interface SellerOnBill extends PartyOnBill {
+  email?: string | null;
   bankName: string | null;
   bankAccount: string | null;
   bankIfsc: string | null;
@@ -57,13 +61,55 @@ export interface BillLineIn {
   gstRate?: string | number;
 }
 
-export interface BillInput {
+/** The invoice header: how and where the goods went. */
+export interface BillShipping {
+  transport: string | null;
+  destination: string | null;
+  docket: string | null;
+  paymentTerms: string | null;
+  shipTo: { name: string; address: string | null } | null;
+}
+
+export interface BillInput extends Partial<BillShipping> {
   kind: BillKind;
   billDate: string;
   lines: BillLineIn[];
   /** Freight/packing, rupees. */
   charges?: string | number;
   notes?: string | null;
+}
+
+const SHORT = 120;
+const LONG = 400;
+
+function shortText(v: unknown, max = SHORT): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "string") throw new LedgerError("INVALID_INPUT", "Expected text");
+  const t = v.trim().replace(/[ \t]+/g, " ");
+  if (t.length > max) throw new LedgerError("TEXT_TOO_LONG", "Too long", { max });
+  return t || null;
+}
+
+/** The shipping fields of a request body, untouched (cleanShipping checks them). */
+export const shippingIn = (b: Partial<BillShipping>): Partial<BillShipping> => ({ transport: b.transport, destination: b.destination, docket: b.docket, paymentTerms: b.paymentTerms, shipTo: b.shipTo });
+
+function cleanShipping(input: Partial<BillShipping>): BillShipping {
+  const raw = input.shipTo;
+  let shipTo: BillShipping["shipTo"] = null;
+  if (raw !== undefined && raw !== null) {
+    if (typeof raw !== "object") throw new LedgerError("INVALID_INPUT", "Ship to must be a name and address");
+    const name = shortText(raw.name);
+    const address = shortText(raw.address, LONG);
+    if (!name && address) throw new LedgerError("SHIP_TO_NAME", "Who are the goods going to?");
+    shipTo = name ? { name, address } : null;
+  }
+  return {
+    transport: shortText(input.transport),
+    destination: shortText(input.destination),
+    docket: shortText(input.docket),
+    paymentTerms: shortText(input.paymentTerms),
+    shipTo,
+  };
 }
 
 /** Percent with up to 2 decimals as hundredths: "5" → 500. */
@@ -131,6 +177,7 @@ async function sellerNow(db: Db, companyId: string): Promise<SellerOnBill & { pr
     state: c.state,
     gstin: c.gstin,
     phone: c.phone,
+    email: c.email,
     bankName: c.bankName,
     bankAccount: c.bankAccount,
     bankIfsc: c.bankIfsc,
@@ -142,7 +189,15 @@ async function sellerNow(db: Db, companyId: string): Promise<SellerOnBill & { pr
 async function partyNow(db: Db, companyId: string, partyId: string): Promise<PartyOnBill> {
   const [p] = await db.select().from(parties).where(and(eq(parties.id, partyId), eq(parties.companyId, companyId)));
   if (!p) throw new LedgerError("UNKNOWN_PARTY", "Party not found");
-  return { name: p.name, address: p.address, city: p.city, state: p.state, gstin: p.taxIdType === "gstin" ? p.taxId : null, phone: p.phone };
+  return {
+    name: p.name,
+    address: p.address,
+    city: p.city,
+    state: p.state,
+    gstin: p.taxIdType === "gstin" ? p.taxId : null,
+    phone: p.phone,
+    aadhaar: p.taxIdType === "aadhaar" && p.taxId ? maskAadhaar(p.taxId) : null,
+  };
 }
 
 async function nextNumber(tx: Db, companyId: string, prefix: string, kind: BillKind, billDate: string) {
@@ -167,7 +222,7 @@ async function writeRevision(
   ctx: Ctx,
   billId: string,
   rev: number,
-  values: { kind: BillKind; number: string; billDate: string; partyId: string; party: PartyOnBill; seller: SellerOnBill; interstate: boolean; charges: number; dispatchRev: number; notes: string | null; status: "active" | "cancelled"; reason: string | null },
+  values: { kind: BillKind; number: string; billDate: string; partyId: string; party: PartyOnBill; seller: SellerOnBill; interstate: boolean; charges: number; dispatchRev: number; notes: string | null; status: "active" | "cancelled"; reason: string | null } & BillShipping,
   lines: CleanLine[],
 ) {
   const totals = totalsOf(values.kind, lines, values.interstate, values.charges);
@@ -216,6 +271,7 @@ export async function createBill(db: Db, ctx: Ctx, dispatchId: string, input: Bi
   assertEntryDate(input.billDate, ctx.now);
   const lines = cleanLines(input.lines);
   const charges = rupees(input.charges);
+  const shipping = cleanShipping(input);
   return db.transaction(async (tx) => {
     await lockCompany(tx, ctx.companyId);
     const [d] = await tx.select({ id: dispatches.id }).from(dispatches).where(and(eq(dispatches.id, dispatchId), eq(dispatches.companyId, ctx.companyId)));
@@ -235,7 +291,7 @@ export async function createBill(db: Db, ctx: Ctx, dispatchId: string, input: Bi
       ctx,
       b.id,
       1,
-      { kind: input.kind, number, billDate: input.billDate, partyId: drev.partyId, party, seller, interstate, charges, dispatchRev: drev.rev, notes: input.notes?.trim() || null, status: "active", reason: null },
+      { kind: input.kind, number, billDate: input.billDate, partyId: drev.partyId, party, seller, interstate, charges, dispatchRev: drev.rev, notes: input.notes?.trim() || null, status: "active", reason: null, ...shipping },
       lines,
     );
     await audit(tx, ctx, "bill.create", "bill", b.id, { dispatchId, number, kind: input.kind, total: totals.total });
@@ -257,6 +313,7 @@ export async function reviseBill(db: Db, ctx: Ctx, billId: string, input: BillIn
   assertEntryDate(input.billDate, ctx.now);
   const lines = cleanLines(input.lines);
   const charges = rupees(input.charges);
+  const shipping = cleanShipping(input);
   return db.transaction(async (tx) => {
     await lockCompany(tx, ctx.companyId);
     const { bill, cur } = await currentRevision(tx, ctx, billId);
@@ -275,7 +332,7 @@ export async function reviseBill(db: Db, ctx: Ctx, billId: string, input: BillIn
       ctx,
       billId,
       cur.rev + 1,
-      { kind: input.kind, number, billDate: input.billDate, partyId: cur.partyId, party, seller, interstate, charges, dispatchRev: drev.rev, notes: input.notes?.trim() || null, status: "active", reason: input.reason?.trim() || null },
+      { kind: input.kind, number, billDate: input.billDate, partyId: cur.partyId, party, seller, interstate, charges, dispatchRev: drev.rev, notes: input.notes?.trim() || null, status: "active", reason: input.reason?.trim() || null, ...shipping },
       lines,
     );
     await audit(tx, ctx, "bill.revise", "bill", billId, { rev: cur.rev + 1, number, previousNumber: number === cur.number ? undefined : cur.number, kind: input.kind, total: totals.total });
@@ -308,6 +365,7 @@ export async function cancelBill(db: Db, ctx: Ctx, billId: string, input: { base
         charges: toCenti(cur.charges),
         dispatchRev: cur.dispatchRev,
         notes: cur.notes,
+        ...shippingOf(cur),
         status: "cancelled",
         reason: input.reason?.trim() || null,
       },
@@ -316,6 +374,14 @@ export async function cancelBill(db: Db, ctx: Ctx, billId: string, input: { base
     await audit(tx, ctx, "bill.cancel", "bill", billId, { number: cur.number, reason: input.reason ?? null });
   });
 }
+
+const shippingOf = (r: typeof billRevisions.$inferSelect): BillShipping => ({
+  transport: r.transport,
+  destination: r.destination,
+  docket: r.docket,
+  paymentTerms: r.paymentTerms,
+  shipTo: (r.shipTo as BillShipping["shipTo"]) ?? null,
+});
 
 async function linesOf(db: Db, revisionId: string): Promise<CleanLine[]> {
   const rows = await db.select().from(billLines).where(eq(billLines.billRevisionId, revisionId)).orderBy(asc(billLines.lineNo));
@@ -331,7 +397,7 @@ async function linesOf(db: Db, revisionId: string): Promise<CleanLine[]> {
   }));
 }
 
-export interface BillView {
+export interface BillView extends BillShipping {
   id: string;
   dispatchId: string;
   shareToken: string;
@@ -377,6 +443,7 @@ async function viewOf(db: Db, bill: typeof bills.$inferSelect): Promise<BillView
     interstate: cur.interstate,
     charges,
     notes: cur.notes,
+    ...shippingOf(cur),
     status: cur.status,
     reason: cur.reason,
     lines,
@@ -467,7 +534,15 @@ export async function billDraft(db: Db, ctx: Ctx, dispatchId: string) {
   const rates = await lastRates(db, ctx, d.partyId, itemIds);
   const { prefix, ...seller } = await sellerNow(db, ctx.companyId);
   const party = await partyNow(db, ctx.companyId, d.partyId);
+  // The dispatch says which transporter took it; else the transporter and terms usually stay the same for a party.
+  const [last] = await db
+    .select({ transport: billRevisions.transport, paymentTerms: billRevisions.paymentTerms, destination: billRevisions.destination })
+    .from(billRevisions)
+    .where(and(eq(billRevisions.companyId, ctx.companyId), eq(billRevisions.partyId, d.partyId), eq(billRevisions.status, "active")))
+    .orderBy(desc(billRevisions.createdAt))
+    .limit(1);
   return {
+    shipping: { transport: d.transport ?? last?.transport ?? null, destination: last?.destination ?? party.city, docket: null, paymentTerms: last?.paymentTerms ?? null, shipTo: null } satisfies BillShipping,
     dispatchId,
     dispatchDate: d.dispatchDate,
     billDate: todayIST(ctx.now) < d.dispatchDate ? todayIST(ctx.now) : d.dispatchDate,

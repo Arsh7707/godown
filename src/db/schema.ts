@@ -65,6 +65,7 @@ export const companies = pgTable("companies", {
   gstin: text("gstin"),
   address: text("address"),
   phone: text("phone"),
+  email: text("email"),
   /** Bank and UPI details printed on bills so parties know where to pay. */
   bankName: text("bank_name"),
   bankAccount: text("bank_account"),
@@ -611,6 +612,14 @@ export const billRevisions = pgTable(
     /** The dispatch revision this bill was made from (shows when the dispatch changed since). */
     dispatchRev: integer("dispatch_rev").notNull(),
     notes: text("notes"),
+    /** Printed in the invoice header, as on Tally bills. All optional. */
+    transport: text("transport"),
+    destination: text("destination"),
+    /** Dispatch doc / LR / bilty number. */
+    docket: text("docket"),
+    paymentTerms: text("payment_terms"),
+    /** { name, address } when the goods go somewhere other than the buyer. */
+    shipTo: jsonb("ship_to"),
     status: billStatusEnum("status").notNull(),
     reason: text("reason"),
     createdBy: createdBy(),

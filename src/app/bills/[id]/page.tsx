@@ -28,9 +28,12 @@ export default async function BillPage({ params }: PageProps<"/bills/[id]">) {
   return (
     <>
       <AppHeader companyName={user.companyName} userName={user.name} lang={user.language} back="/bills" title={`${t.b.bill} ${b.number}`} />
-      <Page>
-        {b.status === "active" && b.dispatchCancelled && <Notice tone="warn">{t.b.dispatchCancelled}</Notice>}
-        {b.status === "active" && !b.dispatchCancelled && b.dispatchChanged && <Notice tone="warn">{t.b.dispatchChanged}</Notice>}
+      {/* Printing: only the bill, at full A4 width. */}
+      <Page className="print:max-w-none print:space-y-0 print:p-0">
+        <div className="space-y-4 print:hidden">
+          {b.status === "active" && b.dispatchCancelled && <Notice tone="warn">{t.b.dispatchCancelled}</Notice>}
+          {b.status === "active" && !b.dispatchCancelled && b.dispatchChanged && <Notice tone="warn">{t.b.dispatchChanged}</Notice>}
+        </div>
         <BillActions t={t} canChange={canMakeBills(ctx)} bill={{ id: b.id, rev: b.rev, number: b.number, total: b.totals.total, shareToken: b.shareToken, partyPhone: b.party.phone, status: b.status }} />
         <BillSheet bill={b} />
         <div className="space-y-2 print:hidden">

@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { amountInWords, billNumber, computeBill, defaultPrefix, financialYear, formatRupees, paiseToText, parseRupees } from "@/billing/compute";
+import { amountInWords, billNumber, computeBill, defaultPrefix, financialYear, formatAmount, formatRupees, hsnSummary, paiseToText, parseRupees } from "@/billing/compute";
 
 describe("bill amounts", () => {
   it("a GST bill in the firm's state: CGST + SGST, rounded to the rupee", () => {
@@ -112,4 +112,63 @@ describe("money text", () => {
     expect(amountInWords(25_00_00_000_00 + 7550)).toBe("Rupees Twenty Five Crore Seventy Five and Fifty Paise Only");
     expect(amountInWords(0)).toBe("Rupees Zero Only");
   });
+});
+
+describe("HSN-wise tax table", () => {
+  it("one row per HSN and rate, freight on its own row, IGST to another state", () => {
+    const lines = [
+      { quantity: 1000, rate: 62500, gstRate: 500, hsn: "94044010" },
+      { quantity: 200, rate: 26000, gstRate: 500, hsn: "63041930" },
+      { quantity: 200, rate: 85000, gstRate: 500, hsn: "63014000" },
+    ];
+    const totals = computeBill("gst", lines, { interstate: true });
+    expect(totals.total).toBe(889400);
+    expect(totals.roundOff).toBe(50);
+    expect(hsnSummary(lines, totals, true)).toEqual([
+      { hsn: "94044010", gstRate: 500, taxable: 625000, cgst: 0, sgst: 0, igst: 31250 },
+      { hsn: "63041930", gstRate: 500, taxable: 52000, cgst: 0, sgst: 0, igst: 2600 },
+      { hsn: "63014000", gstRate: 500, taxable: 170000, cgst: 0, sgst: 0, igst: 8500 },
+    ]);
+  });
+
+  it("same HSN twice is one row; freight is taxed at the top rate", () => {
+    const lines = [
+      { quantity: 100, rate: 10000, gstRate: 500, hsn: "5208" },
+      { quantity: 100, rate: 20000, gstRate: 500, hsn: "5208" },
+      { quantity: 100, rate: 10000, gstRate: 1800, hsn: null },
+    ];
+    const totals = computeBill("gst", lines, { interstate: false, charges: 5000 });
+    expect(hsnSummary(lines, totals, false)).toEqual([
+      { hsn: "5208", gstRate: 500, taxable: 30000, cgst: 750, sgst: 750, igst: 0 },
+      { hsn: null, gstRate: 1800, taxable: 10000, cgst: 900, sgst: 900, igst: 0 },
+      { hsn: null, charges: true, gstRate: 1800, taxable: 5000, cgst: 450, sgst: 450, igst: 0 },
+    ]);
+  });
+
+  it("a kacha bill has no tax table", () => {
+    const lines = [{ quantity: 100, rate: 10000, gstRate: 500, hsn: "5208" }];
+    expect(hsnSummary(lines, computeBill("kacha", lines, { interstate: false }), false)).toEqual([]);
+  });
+
+  it("the rows always add up to the bill's tax, paisa for paisa", () => {
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.array(fc.record({ quantity: fc.integer({ min: 1, max: 100_000 }), rate: fc.integer({ min: 0, max: 1_000_000 }), discountPct: fc.integer({ min: 0, max: 5000 }), gstRate: fc.constantFrom(0, 300, 500, 1800), hsn: fc.constantFrom("5208", "6304", "9404", null) }), { minLength: 1, maxLength: 10 }),
+        fc.integer({ min: 0, max: 100_000 }),
+        (interstate, lines, charges) => {
+          const totals = computeBill("gst", lines, { interstate, charges });
+          const rows = hsnSummary(lines, totals, interstate);
+          const sum = (f: (r: { taxable: number; cgst: number; sgst: number; igst: number }) => number) => rows.reduce((s, r) => s + f(r), 0);
+          expect(sum((r) => r.taxable)).toBe(totals.taxable);
+          expect([sum((r) => r.cgst), sum((r) => r.sgst), sum((r) => r.igst)]).toEqual([totals.cgst, totals.sgst, totals.igst]);
+        },
+      ),
+    );
+  });
+});
+
+it("bill columns show amounts without the rupee sign", () => {
+  expect(formatAmount(889400)).toBe("8,894.00");
+  expect(formatAmount(-50)).toBe("−0.50");
 });

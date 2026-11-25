@@ -3,7 +3,8 @@
  * (360px), in English and Hindi:
  *  - nothing wider than the screen;
  *  - every button, link and field is at least 48×48px to tap (inline links in a sentence excepted);
- *  - no text smaller than 14px, and body text (paragraphs) at least 16px;
+ *  - no text smaller than 14px, and body text (paragraphs) at least 16px
+ *    (except the A4 bill itself, [data-paper]: printed size, pinch to zoom);
  *  - no text cut off with "…" or clipped by its box (Hindi matras included);
  *  - no word glued to a number ("after6", "sending6pcs").
  */
@@ -63,7 +64,9 @@ async function audit(page: Page): Promise<Problem[]> {
       seen.add(el);
       const s = getComputedStyle(el);
       const px = parseFloat(s.fontSize);
-      if (px < 13.9) out.push({ rule: "text < 14px", what: `"${text.slice(0, 40)}" ${px}px` });
+      if (el.closest("[data-paper]")) {
+        // The bill is a page of paper: small print by design, read by zooming.
+      } else if (px < 13.9) out.push({ rule: "text < 14px", what: `"${text.slice(0, 40)}" ${px}px` });
       else if (px < 15.9 && el.closest("p") && !el.closest("small,time,[data-caption]") && text.length > 40) out.push({ rule: "body text < 16px", what: `"${text.slice(0, 40)}" ${px}px` });
       if (s.textOverflow === "ellipsis" && el.scrollWidth > el.clientWidth + 1) out.push({ rule: "text cut off", what: `"${text.slice(0, 40)}"` });
       // Cut off by a box around it (a card with rounded, hidden overflow).
@@ -77,8 +80,8 @@ async function audit(page: Page): Promise<Problem[]> {
       }
       if ((s.overflow === "hidden" || s.overflowY === "hidden") && el.scrollHeight > el.clientHeight + 2 && el.clientHeight > 0) out.push({ rule: "text clipped", what: `"${text.slice(0, 40)}"` });
     }
-    // GSTINs (on bills) are letters and digits by design.
-    const all = document.body.innerText.replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/g, "");
+    // GSTINs and IFSC codes (on bills) are letters and digits by design.
+    const all = document.body.innerText.replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/g, "").replace(/\b[A-Z]{4}0[A-Z0-9]{6}\b/g, "");
     const glued = all.match(/[a-zऀ-ॿ]{3,}\d+|\d+(?:pcs|mtr|kg|nag|dabba|than|thaan)\b/gi);
     if (glued) for (const g of new Set(glued)) out.push({ rule: "word glued to number", what: g });
     return out;

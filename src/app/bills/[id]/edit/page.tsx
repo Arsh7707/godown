@@ -29,7 +29,7 @@ export default async function EditBillPage({ params }: PageProps<"/bills/[id]/ed
         <BillForm
           lang={user.language}
           mode={{ type: "edit", billId: id, baseRev: b.rev }}
-          initial={{ kind: b.kind, billDate: b.billDate, charges: b.charges, notes: b.notes, lines: b.lines }}
+          initial={{ kind: b.kind, billDate: b.billDate, charges: b.charges, notes: b.notes, lines: b.lines, shipping: { transport: b.transport, docket: b.docket, destination: b.destination, paymentTerms: b.paymentTerms, shipTo: b.shipTo } }}
           sellerHasGstin={!!b.seller.gstin}
           partyHasState={!!b.party.state}
           interstate={b.interstate}

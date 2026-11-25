@@ -11,6 +11,7 @@ interface Company {
   gstin: string | null;
   address: string | null;
   phone: string | null;
+  email: string | null;
   bankName: string | null;
   bankAccount: string | null;
   bankIfsc: string | null;
@@ -18,7 +19,7 @@ interface Company {
   billPrefix: string | null;
 }
 
-const BILL_FIELDS = ["gstin", "address", "phone", "bankName", "bankAccount", "bankIfsc", "upiId", "billPrefix"] as const;
+const BILL_FIELDS = ["gstin", "address", "phone", "email", "bankName", "bankAccount", "bankIfsc", "upiId", "billPrefix"] as const;
 type BillField = (typeof BILL_FIELDS)[number];
 
 export function CompanyEditor({ lang, company }: { lang: Lang; company: Company }) {
@@ -65,6 +66,7 @@ export function CompanyEditor({ lang, company }: { lang: Lang; company: Company 
           <textarea value={bill.address} onChange={set("address")} rows={3} className={mfield} />
         </label>
         {field("phone", t.m.businessPhone, { inputMode: "tel" })}
+        {field("email", t.m.businessEmail, { type: "email", inputMode: "email", autoCapitalize: "none" })}
         {field("bankName", t.m.bankName)}
         <div className="grid grid-cols-2 gap-3">
           {field("bankAccount", t.m.bankAccount, { inputMode: "numeric" })}

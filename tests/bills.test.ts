@@ -9,6 +9,7 @@ import { updateParty } from "@/masters/manage";
 import { setProductTax } from "@/masters/manage";
 import { updateCompany } from "@/masters/profiles";
 import { billByToken, billDetail, billDraft, billForDispatch, billList, cancelBill, createBill, lastRates, reviseBill, type BillInput } from "@/billing/service";
+import { isValidAadhaar } from "@/lib/india";
 import { cid, freshDb, makeCompany, NOW, TODAY } from "./helpers";
 
 async function setup() {
@@ -225,5 +226,63 @@ describe("sharing and lists", () => {
     ]);
     expect((await billList(db, co.owner, { partyId: co.gupta.id })).map((x) => x.id)).toEqual([b.billId]);
     await expect(billList(db, co.staff)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("transport and delivery details", () => {
+  const aadhaar = (first11: string) => first11 + [..."0123456789"].find((c) => isValidAadhaar(first11 + c))!;
+
+  it("are saved on the bill, kept through edits, cancelling and the shared link", async () => {
+    const { db, co, send } = await setup();
+    const shipping = { transport: "  Falcon   Roadways ", docket: "LR 5521", destination: "Mainpuri", paymentTerms: "30 days", shipTo: { name: "Sharma Godown", address: "Plot 4, Focal Point" } };
+    const { billId } = await createBill(db, co.owner, await send(), bill(shipping));
+    const b = await billDetail(db, co.owner, billId);
+    expect(b).toMatchObject({ ...shipping, transport: "Falcon Roadways" });
+    await reviseBill(db, co.owner, billId, { ...bill({ ...shipping, docket: "LR 5522", shipTo: null }), baseRev: 1 });
+    expect(await billDetail(db, co.owner, billId)).toMatchObject({ docket: "LR 5522", shipTo: null, transport: "Falcon Roadways" });
+    await cancelBill(db, co.owner, billId, { baseRev: 2 });
+    const cancelled = await billDetail(db, co.owner, billId);
+    expect(cancelled).toMatchObject({ status: "cancelled", docket: "LR 5522", destination: "Mainpuri" });
+    expect(await billByToken(db, cancelled.shareToken)).toMatchObject({ docket: "LR 5522" });
+  });
+
+  it("all optional; empty text is saved as nothing", async () => {
+    const { db, co, send } = await setup();
+    const { billId } = await createBill(db, co.owner, await send(), bill({ transport: "   ", shipTo: { name: " ", address: "" } }));
+    expect(await billDetail(db, co.owner, billId)).toMatchObject({ transport: null, docket: null, destination: null, paymentTerms: null, shipTo: null });
+  });
+
+  it("refuses text that is too long, an address with no name, and things that aren't text", async () => {
+    const { db, co, send } = await setup();
+    const d = await send();
+    await expect(createBill(db, co.owner, d, bill({ transport: "x".repeat(121) }))).rejects.toMatchObject({ code: "TEXT_TOO_LONG" });
+    await expect(createBill(db, co.owner, d, bill({ shipTo: { name: "", address: "Somewhere" } }))).rejects.toMatchObject({ code: "SHIP_TO_NAME" });
+    await expect(createBill(db, co.owner, d, bill({ docket: 42 as unknown as string }))).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(createBill(db, co.owner, d, bill({ shipTo: "Somewhere" as unknown as null }))).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
+  it("a new bill starts with the party's city, and the transport and terms of its last bill", async () => {
+    const { db, co, send } = await setup();
+    await updateParty(db, co.owner, co.sharma.id, { city: "Ludhiana" });
+    const first = await send();
+    expect((await billDraft(db, co.owner, first)).shipping).toEqual({ transport: null, destination: "Ludhiana", docket: null, paymentTerms: null, shipTo: null });
+    await createBill(db, co.owner, first, bill({ transport: "Falcon", paymentTerms: "Cash", docket: "LR 1", destination: "Khanna" }));
+    expect((await billDraft(db, co.owner, await send())).shipping).toEqual({ transport: "Falcon", destination: "Khanna", docket: null, paymentTerms: "Cash", shipTo: null });
+    expect((await billDraft(db, co.owner, await send(co.gupta.id))).shipping.transport).toBeNull();
+    // The transporter written on the dispatch comes first.
+    const viaDispatch = (await createDispatch(db, co.staff, { captureId: cid(), partyId: co.sharma.id, dispatchDate: TODAY, transport: "VRL Logistics", lines: [{ itemId: co.d4012.id, quantity: "1" }], channel: "app", inputMethod: "form" })).dispatchId;
+    expect((await billDraft(db, co.owner, viaDispatch)).shipping.transport).toBe("VRL Logistics");
+  });
+
+  it("the bill shows the firm's email and a party's Aadhaar only masked", async () => {
+    const { db, co, send } = await setup();
+    await updateCompany(db, co.owner, { email: " Accounts@Test.IN " });
+    await expect(updateCompany(db, co.owner, { email: "not an email" })).rejects.toMatchObject({ code: "INVALID_EMAIL" });
+    await updateParty(db, co.owner, co.sharma.id, { taxIdType: "aadhaar", taxId: aadhaar("98765432109") });
+    const { billId } = await createBill(db, co.owner, await send(), bill());
+    const b = await billDetail(db, co.owner, billId);
+    expect(b.seller.email).toBe("accounts@test.in");
+    expect(b.party).toMatchObject({ gstin: null, aadhaar: expect.stringMatching(/^XXXX XXXX \d{4}$/) });
+    expect(JSON.stringify(b)).not.toContain("98765432109");
   });
 });
